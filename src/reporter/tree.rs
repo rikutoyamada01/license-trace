@@ -36,9 +36,9 @@ impl TreeReporter {
             let lic_badge = match child.license.category {
                 LicenseCategory::Permissive => child.license.raw.green().to_string(),
                 LicenseCategory::WeakCopyleft => child.license.raw.yellow().to_string(),
-                LicenseCategory::StrongCopyleft | LicenseCategory::NetworkCopyleft | LicenseCategory::NonCommercial => {
-                    child.license.raw.red().bold().to_string()
-                }
+                LicenseCategory::StrongCopyleft
+                | LicenseCategory::NetworkCopyleft
+                | LicenseCategory::NonCommercial => child.license.raw.red().bold().to_string(),
                 _ => child.license.raw.cyan().to_string(),
             };
 

@@ -3,16 +3,12 @@ use clap::Parser;
 use owo_colors::OwoColorize;
 use std::process::exit;
 
-mod cli;
-mod model;
-mod policy;
-mod reporter;
-mod resolver;
-
-use cli::{AuditArgs, Cli, Commands, ExportArgs, OutputFormat, TraceArgs, WhyArgs};
-use policy::{CompatibilityReport, CompatibilityStatus};
-use reporter::{AuditReporter, JsonReporter, NoticeReporter, TableReporter, TreeReporter};
-use resolver::NpmOnlineResolver;
+use license_trace::cli::{AuditArgs, Cli, Commands, ExportArgs, OutputFormat, TraceArgs, WhyArgs};
+use license_trace::policy::{CompatibilityReport, CompatibilityStatus};
+use license_trace::reporter::{
+    AuditReporter, JsonReporter, NoticeReporter, TableReporter, TreeReporter,
+};
+use license_trace::resolver::{self, NpmOnlineResolver};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -59,15 +55,22 @@ async fn handle_audit(args: AuditArgs) -> Result<()> {
     if args.fail_on_incompatible && report.status == CompatibilityStatus::Incompatible {
         eprintln!(
             "{}",
-            "[ERROR] Incompatible license constraints detected in dependencies.".bold().red()
+            "[ERROR] Incompatible license constraints detected in dependencies."
+                .bold()
+                .red()
         );
         exit_code = 1;
     }
 
-    if args.fail_on_unknown && (report.status == CompatibilityStatus::NeedsReview || report.obligations.unknown_license_count > 0) {
+    if args.fail_on_unknown
+        && (report.status == CompatibilityStatus::NeedsReview
+            || report.obligations.unknown_license_count > 0)
+    {
         eprintln!(
             "{}",
-            "[WARN] Unknown licenses require manual review before passing audit.".bold().yellow()
+            "[WARN] Unknown licenses require manual review before passing audit."
+                .bold()
+                .yellow()
         );
         if exit_code == 0 {
             exit_code = 2;
@@ -91,16 +94,40 @@ async fn handle_trace(args: TraceArgs) -> Result<()> {
             .map_err(|_| anyhow::anyhow!("Directory '{}' does not exist", path_obj.display()))?;
         println!("Tracing local project at '{}'...", project_dir.display());
         resolver::resolve_auto(&project_dir)?
-    } else if target.starts_with("http://") || target.starts_with("https://") || target.starts_with("git@") {
+    } else if target.starts_with("http://")
+        || target.starts_with("https://")
+        || target.starts_with("git@")
+    {
         // 2. Git リポジトリ URL の解析 (shallow clone して監査)
-        println!("Cloning remote git repository '{}'...", target.bold().cyan());
-        let temp_dir = std::env::temp_dir().join(format!("license-trace-git-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_millis()));
+        if target.starts_with('-') {
+            anyhow::bail!("Invalid git repository URL '{}'", target);
+        }
+        println!(
+            "Cloning remote git repository '{}'...",
+            target.bold().cyan()
+        );
+        let temp_dir = std::env::temp_dir().join(format!(
+            "license-trace-git-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        ));
         let status = std::process::Command::new("git")
-            .args(["clone", "--depth", "1", target, temp_dir.to_str().unwrap()])
+            .args([
+                "clone",
+                "--depth",
+                "1",
+                "--",
+                target,
+                temp_dir.to_str().unwrap(),
+            ])
             .output()?;
 
         if !status.status.success() {
-            anyhow::bail!("Failed to clone git repository: {}", String::from_utf8_lossy(&status.stderr));
+            anyhow::bail!(
+                "Failed to clone git repository: {}",
+                String::from_utf8_lossy(&status.stderr)
+            );
         }
 
         let res = resolver::resolve_auto(&temp_dir);
@@ -117,10 +144,7 @@ async fn handle_trace(args: TraceArgs) -> Result<()> {
         let resolver = NpmOnlineResolver::new(args.max_depth);
         match resolver.resolve_package(pkg_name, version.as_deref()).await {
             Ok(g) => g,
-            Err(e) => {
-                eprintln!("[ERROR] Failed to resolve package: {}", e);
-                exit(1);
-            }
+            Err(e) => anyhow::bail!("Failed to resolve package: {}", e),
         }
     };
 
@@ -150,15 +174,22 @@ async fn handle_trace(args: TraceArgs) -> Result<()> {
     if args.fail_on_incompatible && report.status == CompatibilityStatus::Incompatible {
         eprintln!(
             "{}",
-            "[ERROR] Incompatible license constraints detected in dependencies.".bold().red()
+            "[ERROR] Incompatible license constraints detected in dependencies."
+                .bold()
+                .red()
         );
         exit_code = 1;
     }
 
-    if args.fail_on_unknown && (report.status == CompatibilityStatus::NeedsReview || report.obligations.unknown_license_count > 0) {
+    if args.fail_on_unknown
+        && (report.status == CompatibilityStatus::NeedsReview
+            || report.obligations.unknown_license_count > 0)
+    {
         eprintln!(
             "{}",
-            "[WARN] Unknown licenses require manual review before passing audit.".bold().yellow()
+            "[WARN] Unknown licenses require manual review before passing audit."
+                .bold()
+                .yellow()
         );
         if exit_code == 0 {
             exit_code = 2;
@@ -176,7 +207,10 @@ async fn handle_export(args: ExportArgs) -> Result<()> {
     let project_dir = std::fs::canonicalize(&args.path)
         .map_err(|_| anyhow::anyhow!("Directory '{}' does not exist", args.path.display()))?;
 
-    println!("Generating third-party notices for project at '{}'...", project_dir.display());
+    println!(
+        "Generating third-party notices for project at '{}'...",
+        project_dir.display()
+    );
     let graph = resolver::resolve_auto(&project_dir)?;
     let content = NoticeReporter::generate_markdown(&graph, args.prod_only);
 
@@ -247,11 +281,14 @@ async fn handle_why(args: WhyArgs) -> Result<()> {
 
 fn parse_pkg_spec(pkg: &str) -> (&str, Option<String>) {
     let trimmed = pkg.trim();
-    if trimmed.starts_with('@') {
+    if let Some(stripped) = trimmed.strip_prefix('@') {
         // スコープ付きパッケージ (例: @angular/core@17.0.0)
-        if let Some(second_at_idx) = trimmed[1..].find('@') {
+        if let Some(second_at_idx) = stripped.find('@') {
             let split_idx = 1 + second_at_idx;
-            (&trimmed[..split_idx], Some(trimmed[split_idx + 1..].to_string()))
+            (
+                &trimmed[..split_idx],
+                Some(trimmed[split_idx + 1..].to_string()),
+            )
         } else {
             (trimmed, None)
         }

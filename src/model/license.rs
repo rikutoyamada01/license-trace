@@ -100,7 +100,10 @@ impl LicenseAnalysis {
     /// 生のライセンス文字列を解析して分類と義務を判定
     pub fn parse(raw_license: &str) -> Self {
         let trimmed = raw_license.trim();
-        if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("unknown") || trimmed.eq_ignore_ascii_case("unlicensed") {
+        if trimmed.is_empty()
+            || trimmed.eq_ignore_ascii_case("unknown")
+            || trimmed.eq_ignore_ascii_case("unlicensed")
+        {
             return Self::unknown(trimmed);
         }
 
@@ -138,7 +141,11 @@ impl LicenseAnalysis {
 
     pub fn unknown(raw: &str) -> Self {
         Self {
-            raw: if raw.is_empty() { "UNKNOWN".to_string() } else { raw.to_string() },
+            raw: if raw.is_empty() {
+                "UNKNOWN".to_string()
+            } else {
+                raw.to_string()
+            },
             normalized: None,
             category: LicenseCategory::Unknown,
             obligations: LicenseObligations {
@@ -173,7 +180,11 @@ impl LicenseAnalysis {
 
         // 2. AGPL / SSPL
         if upper.contains("AGPL") || upper.contains("SSPL") {
-            let spdx = if upper.contains("AGPL-3") || upper.contains("AGPL V3") { "AGPL-3.0-only" } else { "AGPL-3.0-only" };
+            let spdx = if upper.contains("1.0") {
+                "AGPL-1.0-only"
+            } else {
+                "AGPL-3.0-only"
+            };
             return Self::single_license(raw, spdx, LicenseCategory::NetworkCopyleft);
         }
 
@@ -201,11 +212,19 @@ impl LicenseAnalysis {
 
         // 5. MPL / EPL / CDDL
         if upper.contains("MPL") {
-            let spdx = if upper.contains("1.1") { "MPL-1.1" } else { "MPL-2.0" };
+            let spdx = if upper.contains("1.1") {
+                "MPL-1.1"
+            } else {
+                "MPL-2.0"
+            };
             return Self::single_license(raw, spdx, LicenseCategory::WeakCopyleft);
         }
         if upper.contains("EPL") {
-            let spdx = if upper.contains("1.0") { "EPL-1.0" } else { "EPL-2.0" };
+            let spdx = if upper.contains("1.0") {
+                "EPL-1.0"
+            } else {
+                "EPL-2.0"
+            };
             return Self::single_license(raw, spdx, LicenseCategory::WeakCopyleft);
         }
 
@@ -218,7 +237,10 @@ impl LicenseAnalysis {
         }
 
         // 7. Apache
-        if tokens.contains(&"APACHE-2.0") || tokens.contains(&"APACHE") || tokens.contains(&"APACHE2") {
+        if tokens.contains(&"APACHE-2.0")
+            || tokens.contains(&"APACHE")
+            || tokens.contains(&"APACHE2")
+        {
             let mut analysis = Self::single_license(raw, "Apache-2.0", LicenseCategory::Permissive);
             analysis.obligations.patent_grant = true;
             analysis.obligations.state_changes_required = true;
@@ -226,12 +248,19 @@ impl LicenseAnalysis {
         }
 
         // 8. BSD
-        if tokens.contains(&"BSD-3-CLAUSE") || tokens.contains(&"BSD-2-CLAUSE") || tokens.contains(&"BSD") {
+        if tokens.contains(&"BSD-3-CLAUSE")
+            || tokens.contains(&"BSD-2-CLAUSE")
+            || tokens.contains(&"BSD")
+        {
             return Self::single_license(raw, "BSD-3-Clause", LicenseCategory::Permissive);
         }
 
         // 9. Permissive (MIT, ISC, 0BSD, etc.)
-        if tokens.contains(&"MIT") || tokens.contains(&"ISC") || tokens.contains(&"0BSD") || tokens.contains(&"UNLICENSE") {
+        if tokens.contains(&"MIT")
+            || tokens.contains(&"ISC")
+            || tokens.contains(&"0BSD")
+            || tokens.contains(&"UNLICENSE")
+        {
             let spdx = if tokens.contains(&"ISC") {
                 "ISC"
             } else if tokens.contains(&"0BSD") {
@@ -252,7 +281,11 @@ impl LicenseAnalysis {
         Self {
             raw: raw.to_string(),
             normalized: Some(spdx_id.to_string()),
-            category: if category == LicenseCategory::Unknown { cat } else { category },
+            category: if category == LicenseCategory::Unknown {
+                cat
+            } else {
+                category
+            },
             obligations,
             identifiers: vec![spdx_id.to_string()],
         }
@@ -303,7 +336,11 @@ pub fn categorize_single_spdx(id: &str) -> (LicenseCategory, LicenseObligations)
         || upper.starts_with("CC-BY-NC-SA")
     {
         let is_nc = upper.contains("NC");
-        let cat = if is_nc { LicenseCategory::NonCommercial } else { LicenseCategory::WeakCopyleft };
+        let cat = if is_nc {
+            LicenseCategory::NonCommercial
+        } else {
+            LicenseCategory::WeakCopyleft
+        };
         return (
             cat,
             LicenseObligations {
@@ -399,20 +436,21 @@ pub fn categorize_single_spdx(id: &str) -> (LicenseCategory, LicenseObligations)
     }
 
     match upper.as_str() {
-        "MIT" | "ISC" | "0BSD" | "UNLICENSE" | "CC0-1.0" | "CC0" | "ZLIB" | "WTFPL" | "POSTGRESQL" | "PYTHON-2.0" | "RUBY" | "BSL-1.0" => {
-            (
-                LicenseCategory::Permissive,
-                LicenseObligations {
-                    commercial_use_allowed: true,
-                    distribution_allowed: true,
-                    notice_required: upper != "0BSD" && upper != "UNLICENSE" && !upper.starts_with("CC0"),
-                    source_disclosure: SourceDisclosureLevel::None,
-                    state_changes_required: false,
-                    patent_grant: false,
-                    is_unknown: false,
-                },
-            )
-        }
+        "MIT" | "ISC" | "0BSD" | "UNLICENSE" | "CC0-1.0" | "CC0" | "ZLIB" | "WTFPL"
+        | "POSTGRESQL" | "PYTHON-2.0" | "RUBY" | "BSL-1.0" => (
+            LicenseCategory::Permissive,
+            LicenseObligations {
+                commercial_use_allowed: true,
+                distribution_allowed: true,
+                notice_required: upper != "0BSD"
+                    && upper != "UNLICENSE"
+                    && !upper.starts_with("CC0"),
+                source_disclosure: SourceDisclosureLevel::None,
+                state_changes_required: false,
+                patent_grant: false,
+                is_unknown: false,
+            },
+        ),
         _ => (
             LicenseCategory::Unknown,
             LicenseObligations {
@@ -458,7 +496,9 @@ fn evaluate_expression_ast(expr: &Expression) -> (LicenseCategory, LicenseObliga
         }
     }
 
-    stack.pop().unwrap_or_else(|| categorize_single_spdx("UNKNOWN"))
+    stack
+        .pop()
+        .unwrap_or_else(|| categorize_single_spdx("UNKNOWN"))
 }
 
 /// OR 結合: 利用者は一方を選択できる（最も有利な best を採用）
@@ -473,7 +513,13 @@ fn combine_or(
     // ただし Unknown と Permissive の場合、既知の Permissive を選択可能
     let final_cat = match (l_cat, r_cat) {
         (LicenseCategory::Unknown, other) | (other, LicenseCategory::Unknown) => other,
-        (a, b) => if a < b { a } else { b },
+        (a, b) => {
+            if a < b {
+                a
+            } else {
+                b
+            }
+        }
     };
 
     let final_obs = LicenseObligations {
@@ -500,7 +546,13 @@ fn combine_and(
     let final_cat = match (l_cat, r_cat) {
         (LicenseCategory::Unknown, LicenseCategory::Permissive)
         | (LicenseCategory::Permissive, LicenseCategory::Unknown) => LicenseCategory::Unknown,
-        (a, b) => if a > b { a } else { b },
+        (a, b) => {
+            if a > b {
+                a
+            } else {
+                b
+            }
+        }
     };
 
     let final_obs = LicenseObligations {
@@ -525,14 +577,20 @@ mod tests {
         let analysis = LicenseAnalysis::parse("MIT");
         assert_eq!(analysis.category, LicenseCategory::Permissive);
         assert!(analysis.obligations.commercial_use_allowed);
-        assert_eq!(analysis.obligations.source_disclosure, SourceDisclosureLevel::None);
+        assert_eq!(
+            analysis.obligations.source_disclosure,
+            SourceDisclosureLevel::None
+        );
     }
 
     #[test]
     fn test_parse_gpl() {
         let analysis = LicenseAnalysis::parse("GPL-3.0-only");
         assert_eq!(analysis.category, LicenseCategory::StrongCopyleft);
-        assert_eq!(analysis.obligations.source_disclosure, SourceDisclosureLevel::ProjectLevel);
+        assert_eq!(
+            analysis.obligations.source_disclosure,
+            SourceDisclosureLevel::ProjectLevel
+        );
     }
 
     #[test]
@@ -546,7 +604,10 @@ mod tests {
     fn test_or_expr_takes_best() {
         let analysis = LicenseAnalysis::parse("GPL-2.0-only OR MIT");
         assert_eq!(analysis.category, LicenseCategory::Permissive);
-        assert_eq!(analysis.obligations.source_disclosure, SourceDisclosureLevel::None);
+        assert_eq!(
+            analysis.obligations.source_disclosure,
+            SourceDisclosureLevel::None
+        );
         assert!(analysis.obligations.commercial_use_allowed);
     }
 
@@ -554,7 +615,10 @@ mod tests {
     fn test_and_expr_takes_worst() {
         let analysis = LicenseAnalysis::parse("GPL-2.0-only AND MIT");
         assert_eq!(analysis.category, LicenseCategory::StrongCopyleft);
-        assert_eq!(analysis.obligations.source_disclosure, SourceDisclosureLevel::ProjectLevel);
+        assert_eq!(
+            analysis.obligations.source_disclosure,
+            SourceDisclosureLevel::ProjectLevel
+        );
     }
 
     #[test]
@@ -568,6 +632,9 @@ mod tests {
     fn test_cc_by_sa_is_weak_copyleft() {
         let analysis = LicenseAnalysis::parse("CC-BY-SA-4.0");
         assert_eq!(analysis.category, LicenseCategory::WeakCopyleft);
-        assert_eq!(analysis.obligations.source_disclosure, SourceDisclosureLevel::LibraryLevel);
+        assert_eq!(
+            analysis.obligations.source_disclosure,
+            SourceDisclosureLevel::LibraryLevel
+        );
     }
 }

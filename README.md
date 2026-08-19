@@ -38,7 +38,7 @@
 
 ### Build from Source
 ```bash
-git clone https://github.com/user/license-trace.git
+git clone https://github.com/rikutoyamada01/license-trace.git
 cd license-trace
 cargo build --release
 ```

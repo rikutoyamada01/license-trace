@@ -32,7 +32,9 @@ impl DependencyGraph {
     pub fn get_or_add_node(&mut self, pkg: PackageInfo) -> NodeIndex {
         if let Some(&idx) = self.node_indices.get(&pkg.id) {
             if let Some(existing) = self.graph.node_weight_mut(idx) {
-                if existing.license.category == crate::model::LicenseCategory::Unknown && pkg.license.category != crate::model::LicenseCategory::Unknown {
+                if existing.license.category == crate::model::LicenseCategory::Unknown
+                    && pkg.license.category != crate::model::LicenseCategory::Unknown
+                {
                     *existing = pkg;
                 }
             }
@@ -60,7 +62,7 @@ impl DependencyGraph {
         };
 
         let to_idx = self.get_or_add_node(to_pkg);
-        
+
         // 既存エッジの重複チェック
         if !self.graph.contains_edge(from_idx, to_idx) {
             self.graph.add_edge(from_idx, to_idx, ());
@@ -76,7 +78,9 @@ impl DependencyGraph {
 
     /// ルートパッケージを取得
     pub fn root_package(&self) -> Option<&PackageInfo> {
-        self.node_indices.get(&self.root_id).and_then(|&idx| self.graph.node_weight(idx))
+        self.node_indices
+            .get(&self.root_id)
+            .and_then(|&idx| self.graph.node_weight(idx))
     }
 
     /// 指定したターゲットパッケージへの依存パス（最大30件まで）を探索
@@ -101,7 +105,8 @@ impl DependencyGraph {
             }
 
             // 最大深度 10、最大 30 パスまでの探索（指数爆発防止）
-            let paths = all_simple_paths::<Vec<_>, _>(&self.graph, root_idx, target_idx, 0, Some(10));
+            let paths =
+                all_simple_paths::<Vec<_>, _>(&self.graph, root_idx, target_idx, 0, Some(10));
             for p in paths {
                 let id_path: Vec<PackageId> = p
                     .into_iter()
@@ -127,7 +132,8 @@ impl DependencyGraph {
             None => return None,
         };
 
-        let mut target_indices: std::collections::HashSet<NodeIndex> = std::collections::HashSet::new();
+        let mut target_indices: std::collections::HashSet<NodeIndex> =
+            std::collections::HashSet::new();
         for (id, &idx) in &self.node_indices {
             if id.name == target_name || id.to_string_repr() == target_name {
                 target_indices.insert(idx);

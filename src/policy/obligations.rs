@@ -101,16 +101,15 @@ impl AggregateObligations {
                 }
             }
 
-            if is_problematic {
-                if problematic_set.insert(pkg.id.clone()) {
-                    problematic_packages.push(pkg.clone());
-                }
+            if is_problematic && problematic_set.insert(pkg.id.clone()) {
+                problematic_packages.push(pkg.clone());
             }
 
-            if obs.source_disclosure == SourceDisclosureLevel::LibraryLevel || pkg.license.category == LicenseCategory::WeakCopyleft {
-                if weak_copyleft_set.insert(pkg.id.clone()) {
-                    weak_copyleft_packages.push(pkg.clone());
-                }
+            if (obs.source_disclosure == SourceDisclosureLevel::LibraryLevel
+                || pkg.license.category == LicenseCategory::WeakCopyleft)
+                && weak_copyleft_set.insert(pkg.id.clone())
+            {
+                weak_copyleft_packages.push(pkg.clone());
             }
         }
 

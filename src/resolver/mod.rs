@@ -10,9 +10,9 @@ pub use npm_local::NpmLocalResolver;
 pub use npm_online::NpmOnlineResolver;
 pub use python::PythonResolver;
 
+use crate::model::DependencyGraph;
 use anyhow::Result;
 use std::path::Path;
-use crate::model::DependencyGraph;
 
 /// プロジェクトディレクトリのファイル構成からエコシステムを自動判別して解決
 pub fn resolve_auto(project_dir: &Path) -> Result<DependencyGraph> {
@@ -20,7 +20,9 @@ pub fn resolve_auto(project_dir: &Path) -> Result<DependencyGraph> {
         NpmLocalResolver::resolve_project(project_dir)
     } else if project_dir.join("Cargo.toml").exists() {
         CargoResolver::resolve_project(project_dir)
-    } else if project_dir.join("pyproject.toml").exists() || project_dir.join("requirements.txt").exists() {
+    } else if project_dir.join("pyproject.toml").exists()
+        || project_dir.join("requirements.txt").exists()
+    {
         PythonResolver::resolve_project(project_dir)
     } else if project_dir.join("go.mod").exists() {
         GoModResolver::resolve_project(project_dir)

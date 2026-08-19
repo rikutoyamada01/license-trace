@@ -47,10 +47,14 @@ impl CargoResolver {
         let meta: Value = serde_json::from_slice(&output.stdout)
             .context("Failed to parse cargo metadata JSON")?;
 
-        let packages = meta.get("packages").and_then(|v| v.as_array())
+        let packages = meta
+            .get("packages")
+            .and_then(|v| v.as_array())
             .context("No packages in metadata")?;
 
-        let resolve = meta.get("resolve").and_then(|v| v.as_object())
+        let resolve = meta
+            .get("resolve")
+            .and_then(|v| v.as_object())
             .context("No resolve in metadata")?;
 
         let root_resolve_id = resolve.get("root").and_then(|v| v.as_str());
@@ -61,12 +65,29 @@ impl CargoResolver {
         let mut root_full_id: Option<String> = None;
 
         for pkg in packages {
-            let full_id = pkg.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-            let name = pkg.get("name").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-            let version = pkg.get("version").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+            let full_id = pkg
+                .get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
+            let name = pkg
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
+            let version = pkg
+                .get("version")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
             let manifest_path = pkg.get("manifest_path").and_then(|v| v.as_str());
 
-            let mut license = pkg.get("license").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+            let mut license = pkg
+                .get("license")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string();
             let mut license_text: Option<String> = None;
 
             if let Some(m_path) = manifest_path {
@@ -88,14 +109,30 @@ impl CargoResolver {
                 license = "UNKNOWN".to_string();
             }
 
-            let is_root = root_resolve_id == Some(&full_id) || (root_resolve_id.is_none() && root_pkg_id.is_none());
+            let is_root = root_resolve_id == Some(&full_id)
+                || (root_resolve_id.is_none() && root_pkg_id.is_none());
 
             let pkg_id = PackageId::new(&name, &version);
-            let dep_type = if is_root { DependencyType::Direct } else { DependencyType::Transitive };
-            let mut info = PackageInfo::new(pkg_id.clone(), &license, dep_type, DependencyScope::Production);
-            
-            info.description = pkg.get("description").and_then(|v| v.as_str()).map(|s| s.to_string());
-            info.repository = pkg.get("repository").and_then(|v| v.as_str()).map(|s| s.to_string());
+            let dep_type = if is_root {
+                DependencyType::Direct
+            } else {
+                DependencyType::Transitive
+            };
+            let mut info = PackageInfo::new(
+                pkg_id.clone(),
+                &license,
+                dep_type,
+                DependencyScope::Production,
+            );
+
+            info.description = pkg
+                .get("description")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            info.repository = pkg
+                .get("repository")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
             info.manifest_path = manifest_path.map(|s| s.to_string());
             info.license_text = license_text;
 
@@ -108,7 +145,10 @@ impl CargoResolver {
         }
 
         let root_pkg = if let Some(r_id) = &root_full_id {
-            pkg_map.get(r_id).map(|(p, _, _)| p.clone()).context("Root package not found")?
+            pkg_map
+                .get(r_id)
+                .map(|(p, _, _)| p.clone())
+                .context("Root package not found")?
         } else {
             anyhow::bail!("Could not identify root package");
         };
@@ -133,7 +173,8 @@ impl CargoResolver {
                 // deps 配列から依存先を取得
                 if let Some(deps) = node.get("deps").and_then(|v| v.as_array()) {
                     for dep in deps {
-                        let dep_full_id = dep.get("pkg").and_then(|v| v.as_str()).unwrap_or_default();
+                        let dep_full_id =
+                            dep.get("pkg").and_then(|v| v.as_str()).unwrap_or_default();
                         if let Some((dep_info, _, _)) = pkg_map.get(dep_full_id) {
                             let mut dep_info_cloned = dep_info.clone();
                             if parent_pkg_id == graph.root_id {
@@ -155,9 +196,15 @@ impl CargoResolver {
         let toml_content = fs::read_to_string(&cargo_toml_path)?;
         let toml_val: toml_simple::SimpleToml = toml_simple::parse(&toml_content);
 
-        let root_name = toml_val.get("package.name").unwrap_or_else(|| "my-crate".to_string());
-        let root_ver = toml_val.get("package.version").unwrap_or_else(|| "0.1.0".to_string());
-        let root_lic = toml_val.get("package.license").unwrap_or_else(|| "UNKNOWN".to_string());
+        let root_name = toml_val
+            .get("package.name")
+            .unwrap_or_else(|| "my-crate".to_string());
+        let root_ver = toml_val
+            .get("package.version")
+            .unwrap_or_else(|| "0.1.0".to_string());
+        let root_lic = toml_val
+            .get("package.license")
+            .unwrap_or_else(|| "UNKNOWN".to_string());
 
         let root_pkg = PackageInfo::new(
             PackageId::new(&root_name, &root_ver),
@@ -177,7 +224,11 @@ impl CargoResolver {
         Ok(graph)
     }
 
-    fn parse_cargo_lock_fallback(lock_content: &str, graph: &mut DependencyGraph, root_name: &str) -> Result<()> {
+    fn parse_cargo_lock_fallback(
+        lock_content: &str,
+        graph: &mut DependencyGraph,
+        root_name: &str,
+    ) -> Result<()> {
         let packages = toml_simple::parse_cargo_lock_packages(lock_content);
 
         // 各パッケージを追加（推測ではなく UNKNOWN を付与し安全にレビュー要求）
@@ -200,7 +251,12 @@ impl CargoResolver {
             let parent_id = PackageId::new(&pkg_entry.name, &pkg_entry.version);
             for dep_str in &pkg_entry.dependencies {
                 let dep_name = dep_str.split_whitespace().next().unwrap_or(dep_str);
-                if let Some(dep_pkg) = graph.all_packages().into_iter().find(|p| p.id.name == dep_name).cloned() {
+                if let Some(dep_pkg) = graph
+                    .all_packages()
+                    .into_iter()
+                    .find(|p| p.id.name == dep_name)
+                    .cloned()
+                {
                     if pkg_entry.name == root_name {
                         graph.add_dependency(&graph.root_id.clone(), dep_pkg);
                     } else {
@@ -219,15 +275,39 @@ fn load_crate_license_text(crate_dir: &Path) -> Option<String> {
     let mut texts = Vec::new();
 
     let candidate_files = [
-        "LICENSE", "LICENSE.txt", "LICENSE.md", "LICENCE", "LICENCE.txt", "LICENCE.md",
-        "LICENSE-MIT", "LICENSE-MIT.txt", "LICENSE-MIT.md",
-        "LICENSE-APACHE", "LICENSE-APACHE.txt", "LICENSE-APACHE.md",
-        "LICENSE-BOOST", "LICENSE-BSL", "COPYING", "COPYING.txt", "COPYING.md", "UNLICENSE",
-        "NOTICE", "NOTICE.txt", "NOTICE.md",
-        "ThirdPartyNotices", "ThirdPartyNotices.txt", "ThirdPartyNotices.md",
-        "THIRD-PARTY-LICENSES", "THIRD-PARTY-LICENSES.txt", "THIRD-PARTY-LICENSES.md",
-        "THIRD-PARTY-NOTICES", "THIRD-PARTY-NOTICES.txt", "THIRD-PARTY-NOTICES.md",
-        "THIRDPARTY", "THIRDPARTY.txt", "THIRDPARTY.md",
+        "LICENSE",
+        "LICENSE.txt",
+        "LICENSE.md",
+        "LICENCE",
+        "LICENCE.txt",
+        "LICENCE.md",
+        "LICENSE-MIT",
+        "LICENSE-MIT.txt",
+        "LICENSE-MIT.md",
+        "LICENSE-APACHE",
+        "LICENSE-APACHE.txt",
+        "LICENSE-APACHE.md",
+        "LICENSE-BOOST",
+        "LICENSE-BSL",
+        "COPYING",
+        "COPYING.txt",
+        "COPYING.md",
+        "UNLICENSE",
+        "NOTICE",
+        "NOTICE.txt",
+        "NOTICE.md",
+        "ThirdPartyNotices",
+        "ThirdPartyNotices.txt",
+        "ThirdPartyNotices.md",
+        "THIRD-PARTY-LICENSES",
+        "THIRD-PARTY-LICENSES.txt",
+        "THIRD-PARTY-LICENSES.md",
+        "THIRD-PARTY-NOTICES",
+        "THIRD-PARTY-NOTICES.txt",
+        "THIRD-PARTY-NOTICES.md",
+        "THIRDPARTY",
+        "THIRDPARTY.txt",
+        "THIRDPARTY.md",
     ];
 
     for fname in &candidate_files {
@@ -251,8 +331,12 @@ fn load_crate_license_text(crate_dir: &Path) -> Option<String> {
 
 /// クレートのディレクトリからライセンスファイルを検索して特定
 fn detect_crate_license_files(crate_dir: &Path) -> Option<String> {
-    let has_mit = crate_dir.join("LICENSE-MIT").exists() || crate_dir.join("LICENSE-MIT.md").exists() || crate_dir.join("LICENSE-MIT.txt").exists();
-    let has_apache = crate_dir.join("LICENSE-APACHE").exists() || crate_dir.join("LICENSE-APACHE.md").exists() || crate_dir.join("LICENSE-APACHE.txt").exists();
+    let has_mit = crate_dir.join("LICENSE-MIT").exists()
+        || crate_dir.join("LICENSE-MIT.md").exists()
+        || crate_dir.join("LICENSE-MIT.txt").exists();
+    let has_apache = crate_dir.join("LICENSE-APACHE").exists()
+        || crate_dir.join("LICENSE-APACHE.md").exists()
+        || crate_dir.join("LICENSE-APACHE.txt").exists();
 
     if has_mit && has_apache {
         return Some("MIT OR Apache-2.0".to_string());
@@ -264,17 +348,28 @@ fn detect_crate_license_files(crate_dir: &Path) -> Option<String> {
         return Some("Apache-2.0".to_string());
     }
 
-    let general_licenses = ["LICENSE", "LICENSE.txt", "LICENSE.md", "LICENCE", "COPYING", "UNLICENSE"];
+    let general_licenses = [
+        "LICENSE",
+        "LICENSE.txt",
+        "LICENSE.md",
+        "LICENCE",
+        "COPYING",
+        "UNLICENSE",
+    ];
     for fname in &general_licenses {
         let p = crate_dir.join(fname);
         if p.exists() {
             if let Ok(content) = fs::read_to_string(&p) {
                 let upper = content.to_uppercase();
-                if upper.contains("MIT LICENSE") || upper.contains("PERMISSION IS HEREBY GRANTED, FREE OF CHARGE") {
+                if upper.contains("MIT LICENSE")
+                    || upper.contains("PERMISSION IS HEREBY GRANTED, FREE OF CHARGE")
+                {
                     return Some("MIT".to_string());
                 } else if upper.contains("APACHE LICENSE") && upper.contains("VERSION 2.0") {
                     return Some("Apache-2.0".to_string());
-                } else if upper.contains("BSD 3-CLAUSE") || upper.contains("REDISTRIBUTION AND USE IN SOURCE AND BINARY") {
+                } else if upper.contains("BSD 3-CLAUSE")
+                    || upper.contains("REDISTRIBUTION AND USE IN SOURCE AND BINARY")
+                {
                     return Some("BSD-3-Clause".to_string());
                 } else if upper.contains("BSD 2-CLAUSE") {
                     return Some("BSD-2-Clause".to_string());
@@ -418,7 +513,11 @@ mod toml_simple {
                 if trimmed.starts_with(']') {
                     in_dependencies = false;
                 } else if trimmed.starts_with('"') {
-                    let dep = trimmed.trim_matches(',').trim_matches('"').trim().to_string();
+                    let dep = trimmed
+                        .trim_matches(',')
+                        .trim_matches('"')
+                        .trim()
+                        .to_string();
                     curr_deps.push(dep);
                 }
                 continue;

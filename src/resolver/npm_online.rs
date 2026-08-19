@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
 use reqwest::Client;
+use semver::Version;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use semver::Version;
 
 use crate::model::graph::DependencyGraph;
 use crate::model::package::{DependencyScope, DependencyType, PackageId, PackageInfo};
@@ -33,7 +33,11 @@ impl NpmOnlineResolver {
     }
 
     /// 単一パッケージの依存ツリーをオンラインから再帰解決
-    pub async fn resolve_package(&self, pkg_name: &str, requested_version: Option<&str>) -> Result<DependencyGraph> {
+    pub async fn resolve_package(
+        &self,
+        pkg_name: &str,
+        requested_version: Option<&str>,
+    ) -> Result<DependencyGraph> {
         let root_version = if let Some(v) = requested_version {
             clean_semver_requirement(v)
         } else {
@@ -72,13 +76,11 @@ impl NpmOnlineResolver {
                 .collect();
 
             // semverパース成功分を優先してソート
-            parsed_versions.sort_by(|a, b| {
-                match (&a.0, &b.0) {
-                    (Some(v1), Some(v2)) => v1.cmp(v2),
-                    (Some(_), None) => std::cmp::Ordering::Greater,
-                    (None, Some(_)) => std::cmp::Ordering::Less,
-                    (None, None) => a.1.cmp(b.1),
-                }
+            parsed_versions.sort_by(|a, b| match (&a.0, &b.0) {
+                (Some(v1), Some(v2)) => v1.cmp(v2),
+                (Some(_), None) => std::cmp::Ordering::Greater,
+                (None, Some(_)) => std::cmp::Ordering::Less,
+                (None, None) => a.1.cmp(b.1),
             });
 
             if let Some((_, best_ver)) = parsed_versions.last() {
@@ -86,13 +88,20 @@ impl NpmOnlineResolver {
             }
         }
 
-        anyhow::bail!("Could not resolve latest version for package '{}'", pkg_name);
+        anyhow::bail!(
+            "Could not resolve latest version for package '{}'",
+            pkg_name
+        );
     }
 
     async fn fetch_package_info(&self, pkg_name: &str, version: &str) -> Result<PackageInfo> {
         let clean_version = clean_semver_requirement(version);
-        let url = format!("https://registry.npmjs.org/{}/{}", urlencoding(pkg_name), clean_version);
-        
+        let url = format!(
+            "https://registry.npmjs.org/{}/{}",
+            urlencoding(pkg_name),
+            clean_version
+        );
+
         let data = match self.fetch_json(&url).await {
             Ok(d) => d,
             Err(_) => {
@@ -102,7 +111,7 @@ impl NpmOnlineResolver {
                 if let Some(versions) = full_data.get("versions").and_then(|v| v.as_object()) {
                     if let Some(v_data) = versions.get(&clean_version) {
                         v_data.clone()
-                    } else if let Some((_, v_data)) = versions.iter().last() {
+                    } else if let Some((_, v_data)) = versions.iter().next_back() {
                         v_data.clone()
                     } else {
                         anyhow::bail!("No matching version found for {}@{}", pkg_name, version);
@@ -113,7 +122,10 @@ impl NpmOnlineResolver {
             }
         };
 
-        let resolved_version = data.get("version").and_then(|v| v.as_str()).unwrap_or(&clean_version);
+        let resolved_version = data
+            .get("version")
+            .and_then(|v| v.as_str())
+            .unwrap_or(&clean_version);
         let license_str = extract_license_field(&data);
 
         let mut pkg = PackageInfo::new(
@@ -123,7 +135,10 @@ impl NpmOnlineResolver {
             DependencyScope::Production,
         );
 
-        pkg.description = data.get("description").and_then(|v| v.as_str()).map(|s| s.to_string());
+        pkg.description = data
+            .get("description")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
         if let Some(repo) = data.get("repository") {
             if let Some(url) = repo.as_str() {
                 pkg.repository = Some(url.to_string());
@@ -143,12 +158,20 @@ impl NpmOnlineResolver {
             }
         }
 
-        let resp = self.client.get(url).send().await.context(format!("Failed HTTP GET {}", url))?;
+        let resp = self
+            .client
+            .get(url)
+            .send()
+            .await
+            .context(format!("Failed HTTP GET {}", url))?;
         if !resp.status().is_success() {
             anyhow::bail!("HTTP status {} for URL: {}", resp.status(), url);
         }
 
-        let data: Value = resp.json().await.context(format!("Failed parsing JSON from {}", url))?;
+        let data: Value = resp
+            .json()
+            .await
+            .context(format!("Failed parsing JSON from {}", url))?;
 
         {
             let mut cache = self.cache.lock().await;
@@ -159,13 +182,22 @@ impl NpmOnlineResolver {
     }
 
     #[async_recursion::async_recursion]
-    async fn resolve_recursive(&self, parent_id: &PackageId, current_depth: usize, graph: &mut DependencyGraph) -> Result<()> {
+    async fn resolve_recursive(
+        &self,
+        parent_id: &PackageId,
+        current_depth: usize,
+        graph: &mut DependencyGraph,
+    ) -> Result<()> {
         if current_depth > self.max_depth {
             return Ok(());
         }
 
         let clean_version = clean_semver_requirement(&parent_id.version);
-        let url = format!("https://registry.npmjs.org/{}/{}", urlencoding(&parent_id.name), clean_version);
+        let url = format!(
+            "https://registry.npmjs.org/{}/{}",
+            urlencoding(&parent_id.name),
+            clean_version
+        );
         let data = match self.fetch_json(&url).await {
             Ok(d) => d,
             Err(_) => return Ok(()),
@@ -206,7 +238,8 @@ impl NpmOnlineResolver {
             graph.add_dependency(parent_id, dep_pkg);
 
             if is_new {
-                self.resolve_recursive(&dep_id, current_depth + 1, graph).await?;
+                self.resolve_recursive(&dep_id, current_depth + 1, graph)
+                    .await?;
             }
         }
 
@@ -221,7 +254,13 @@ fn urlencoding(s: &str) -> String {
 fn clean_semver_requirement(v: &str) -> String {
     let s = v.trim();
     // 範囲指定（スペースや || を含む）は latest に解決
-    if s.contains(' ') || s.contains("||") || s.contains('>') || s.contains('<') || s.is_empty() || s == "*" {
+    if s.contains(' ')
+        || s.contains("||")
+        || s.contains('>')
+        || s.contains('<')
+        || s.is_empty()
+        || s == "*"
+    {
         return "latest".to_string();
     }
 
@@ -251,7 +290,9 @@ fn extract_license_field(data: &Value) -> String {
                 if let Some(s) = l.as_str() {
                     Some(s.to_string())
                 } else {
-                    l.get("type").and_then(|v| v.as_str()).map(|s| s.to_string())
+                    l.get("type")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string())
                 }
             })
             .collect();

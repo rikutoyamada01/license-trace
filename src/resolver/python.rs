@@ -29,9 +29,15 @@ impl PythonResolver {
         if pyproject_path.exists() {
             if let Ok(content) = fs::read_to_string(&pyproject_path) {
                 let parsed = parse_simple_pyproject(&content);
-                if let Some(n) = parsed.name { root_name = n; }
-                if let Some(v) = parsed.version { root_ver = v; }
-                if let Some(l) = parsed.license { root_lic = l; }
+                if let Some(n) = parsed.name {
+                    root_name = n;
+                }
+                if let Some(v) = parsed.version {
+                    root_ver = v;
+                }
+                if let Some(l) = parsed.license {
+                    root_lic = l;
+                }
                 direct_deps.extend(parsed.dependencies);
             }
         }
@@ -59,7 +65,8 @@ impl PythonResolver {
 
         // 3. 各依存パッケージのライセンス解決 (ローカル site-packages または PyPI API)
         for (dep_name, dep_ver) in direct_deps {
-            let lic = find_python_package_license(project_dir, &dep_name).unwrap_or_else(|| "UNKNOWN".to_string());
+            let lic = find_python_package_license(project_dir, &dep_name)
+                .unwrap_or_else(|| "UNKNOWN".to_string());
             let pkg_info = PackageInfo::new(
                 PackageId::new(&dep_name, &dep_ver),
                 &lic,
@@ -80,26 +87,45 @@ impl PythonResolver {
             .user_agent(format!("license-trace/{}", env!("CARGO_PKG_VERSION")))
             .build()?;
 
-        let resp = client.get(&url).send().await.context("Failed to query PyPI")?;
+        let resp = client
+            .get(&url)
+            .send()
+            .await
+            .context("Failed to query PyPI")?;
         if !resp.status().is_success() {
             anyhow::bail!("PyPI API returned status {}", resp.status());
         }
 
         let data: serde_json::Value = resp.json().await?;
-        let info = data.get("info").context("Missing info field in PyPI response")?;
+        let info = data
+            .get("info")
+            .context("Missing info field in PyPI response")?;
 
-        let name = info.get("name").and_then(|v| v.as_str()).unwrap_or(pkg_name);
-        let version = info.get("version").and_then(|v| v.as_str()).unwrap_or("0.0.0");
-        
-        let mut lic_str = info.get("license").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
-        
+        let name = info
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or(pkg_name);
+        let version = info
+            .get("version")
+            .and_then(|v| v.as_str())
+            .unwrap_or("0.0.0");
+
+        let mut lic_str = info
+            .get("license")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
+
         // classifiers からライセンスを抽出 (license フィールドが空または UNKNOWN の場合)
         if lic_str.is_empty() || lic_str.eq_ignore_ascii_case("UNKNOWN") {
             if let Some(classifiers) = info.get("classifiers").and_then(|v| v.as_array()) {
                 for c in classifiers {
                     if let Some(s) = c.as_str() {
                         if s.starts_with("License :: OSI Approved :: ") {
-                            lic_str = s.trim_start_matches("License :: OSI Approved :: ").to_string();
+                            lic_str = s
+                                .trim_start_matches("License :: OSI Approved :: ")
+                                .to_string();
                             break;
                         }
                     }
@@ -118,9 +144,17 @@ impl PythonResolver {
             DependencyScope::Production,
         );
 
-        pkg.description = info.get("summary").and_then(|v| v.as_str()).map(|s| s.to_string());
-        pkg.repository = info.get("project_urls")
-            .and_then(|v| v.get("Source").or_else(|| v.get("Homepage")).or_else(|| v.get("Repository")))
+        pkg.description = info
+            .get("summary")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        pkg.repository = info
+            .get("project_urls")
+            .and_then(|v| {
+                v.get("Source")
+                    .or_else(|| v.get("Homepage"))
+                    .or_else(|| v.get("Repository"))
+            })
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
@@ -150,8 +184,9 @@ fn find_python_package_license(project_dir: &Path, pkg_name: &str) -> Option<Str
             for entry in entries.flatten() {
                 let name_str = entry.file_name().to_string_lossy().to_string();
                 let lower_entry = name_str.to_lowercase();
-                
-                if (lower_entry.starts_with(&normalized_name) || lower_entry.starts_with(&pkg_name.to_lowercase()))
+
+                if (lower_entry.starts_with(&normalized_name)
+                    || lower_entry.starts_with(&pkg_name.to_lowercase()))
                     && (lower_entry.ends_with(".dist-info") || lower_entry.ends_with(".egg-info"))
                 {
                     let metadata_file = entry.path().join("METADATA");
@@ -173,10 +208,14 @@ fn find_python_package_license(project_dir: &Path, pkg_name: &str) -> Option<Str
                             for line in meta_content.lines() {
                                 if let Some(lic) = line.strip_prefix("License: ") {
                                     let trimmed = lic.trim();
-                                    if !trimmed.is_empty() && !trimmed.eq_ignore_ascii_case("UNKNOWN") {
+                                    if !trimmed.is_empty()
+                                        && !trimmed.eq_ignore_ascii_case("UNKNOWN")
+                                    {
                                         detected_license = Some(trimmed.to_string());
                                     }
-                                } else if let Some(clf) = line.strip_prefix("Classifier: License :: OSI Approved :: ") {
+                                } else if let Some(clf) =
+                                    line.strip_prefix("Classifier: License :: OSI Approved :: ")
+                                {
                                     classifier_license = Some(clf.trim().to_string());
                                 }
                             }
@@ -224,11 +263,8 @@ fn parse_simple_pyproject(content: &str) -> SimplePyproject {
             in_dependencies = false;
             continue;
         } else if trimmed.starts_with('[') && trimmed.ends_with(']') {
-            if trimmed == "[project.dependencies]" || trimmed == "[tool.poetry.dependencies]" {
-                in_dependencies = true;
-            } else {
-                in_dependencies = false;
-            }
+            in_dependencies =
+                trimmed == "[project.dependencies]" || trimmed == "[tool.poetry.dependencies]";
             in_project = false;
             continue;
         }
@@ -262,7 +298,11 @@ fn parse_simple_pyproject(content: &str) -> SimplePyproject {
             if trimmed.starts_with(']') {
                 in_dependencies = false;
             } else if trimmed.starts_with('"') || trimmed.starts_with('\'') {
-                let dep_str = trimmed.trim_matches(',').trim_matches('"').trim_matches('\'').trim();
+                let dep_str = trimmed
+                    .trim_matches(',')
+                    .trim_matches('"')
+                    .trim_matches('\'')
+                    .trim();
                 if !dep_str.is_empty() {
                     let (d_name, d_ver) = parse_python_dep_spec(dep_str);
                     dependencies.push((d_name, d_ver));

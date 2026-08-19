@@ -17,13 +17,19 @@ impl NpmLocalResolver {
             anyhow::bail!("No package.json found at '{}'", project_dir.display());
         }
 
-        let pkg_json_content = fs::read_to_string(&pkg_json_path)
-            .context("Failed to read package.json")?;
-        let pkg_json: Value = serde_json::from_str(&pkg_json_content)
-            .context("Failed to parse package.json")?;
+        let pkg_json_content =
+            fs::read_to_string(&pkg_json_path).context("Failed to read package.json")?;
+        let pkg_json: Value =
+            serde_json::from_str(&pkg_json_content).context("Failed to parse package.json")?;
 
-        let root_name = pkg_json.get("name").and_then(|v| v.as_str()).unwrap_or("my-project");
-        let root_ver = pkg_json.get("version").and_then(|v| v.as_str()).unwrap_or("1.0.0");
+        let root_name = pkg_json
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("my-project");
+        let root_ver = pkg_json
+            .get("version")
+            .and_then(|v| v.as_str())
+            .unwrap_or("1.0.0");
         let root_lic = extract_license_str(&pkg_json);
 
         let root_pkg = PackageInfo::new(
@@ -69,10 +75,17 @@ impl NpmLocalResolver {
                 let pkg_name = if let Some(n) = data.get("name").and_then(|v| v.as_str()) {
                     n.to_string()
                 } else {
-                    rel_path.split("node_modules/").last().unwrap_or(rel_path).to_string()
+                    rel_path
+                        .split("node_modules/")
+                        .last()
+                        .unwrap_or(rel_path)
+                        .to_string()
                 };
 
-                let version = data.get("version").and_then(|v| v.as_str()).unwrap_or("0.0.0");
+                let version = data
+                    .get("version")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("0.0.0");
                 let is_dev = data.get("dev").and_then(|v| v.as_bool()).unwrap_or(false);
                 let is_peer = data.get("peer").and_then(|v| v.as_bool()).unwrap_or(false);
 
@@ -97,7 +110,8 @@ impl NpmLocalResolver {
 
                 let license_text = load_pkg_license_text(&pkg_dir);
 
-                let is_direct = !rel_path.contains("node_modules/") || rel_path.matches("node_modules/").count() == 1;
+                let is_direct = !rel_path.contains("node_modules/")
+                    || rel_path.matches("node_modules/").count() == 1;
                 let dep_type = if is_direct {
                     DependencyType::Direct
                 } else {
@@ -114,11 +128,19 @@ impl NpmLocalResolver {
 
             // ルート依存と子依存関係をエッジで結ぶ
             if let Some(root_pkg_data) = packages.get("") {
-                if let Some(deps) = root_pkg_data.get("dependencies").and_then(|v| v.as_object()) {
+                if let Some(deps) = root_pkg_data
+                    .get("dependencies")
+                    .and_then(|v| v.as_object())
+                {
                     for dep_name in deps.keys() {
                         let expected_path = format!("node_modules/{}", dep_name);
                         if let Some(dep_id) = path_to_id.get(&expected_path) {
-                            if let Some(dep_info) = graph.all_packages().into_iter().find(|p| &p.id == dep_id).cloned() {
+                            if let Some(dep_info) = graph
+                                .all_packages()
+                                .into_iter()
+                                .find(|p| &p.id == dep_id)
+                                .cloned()
+                            {
                                 graph.add_dependency(&graph.root_id.clone(), dep_info);
                             }
                         }
@@ -138,9 +160,16 @@ impl NpmLocalResolver {
                             let nested_path = format!("{}/node_modules/{}", rel_path, dep_name);
                             let top_path = format!("node_modules/{}", dep_name);
 
-                            let target_id = path_to_id.get(&nested_path).or_else(|| path_to_id.get(&top_path));
+                            let target_id = path_to_id
+                                .get(&nested_path)
+                                .or_else(|| path_to_id.get(&top_path));
                             if let Some(t_id) = target_id {
-                                if let Some(dep_info) = graph.all_packages().into_iter().find(|p| &p.id == t_id).cloned() {
+                                if let Some(dep_info) = graph
+                                    .all_packages()
+                                    .into_iter()
+                                    .find(|p| &p.id == t_id)
+                                    .cloned()
+                                {
                                     graph.add_dependency(&parent_id.clone(), dep_info);
                                 }
                             }
@@ -161,7 +190,8 @@ impl NpmLocalResolver {
         if let Some(deps) = pkg_json.get("dependencies").and_then(|v| v.as_object()) {
             for (name, ver_val) in deps {
                 let ver_req = ver_val.as_str().unwrap_or("*");
-                let (actual_ver, lic) = find_local_package_details(project_dir, name).unwrap_or((ver_req.to_string(), "UNKNOWN".to_string()));
+                let (actual_ver, lic) = find_local_package_details(project_dir, name)
+                    .unwrap_or((ver_req.to_string(), "UNKNOWN".to_string()));
                 let pkg = PackageInfo::new(
                     PackageId::new(name, actual_ver),
                     &lic,
@@ -175,7 +205,8 @@ impl NpmLocalResolver {
         if let Some(dev_deps) = pkg_json.get("devDependencies").and_then(|v| v.as_object()) {
             for (name, ver_val) in dev_deps {
                 let ver_req = ver_val.as_str().unwrap_or("*");
-                let (actual_ver, lic) = find_local_package_details(project_dir, name).unwrap_or((ver_req.to_string(), "UNKNOWN".to_string()));
+                let (actual_ver, lic) = find_local_package_details(project_dir, name)
+                    .unwrap_or((ver_req.to_string(), "UNKNOWN".to_string()));
                 let pkg = PackageInfo::new(
                     PackageId::new(name, actual_ver),
                     &lic,
@@ -191,10 +222,17 @@ impl NpmLocalResolver {
 }
 
 fn find_local_package_details(project_dir: &Path, name: &str) -> Option<(String, String)> {
-    let node_pkg = project_dir.join("node_modules").join(name).join("package.json");
+    let node_pkg = project_dir
+        .join("node_modules")
+        .join(name)
+        .join("package.json");
     if let Ok(content) = fs::read_to_string(&node_pkg) {
         if let Ok(data) = serde_json::from_str::<Value>(&content) {
-            let ver = data.get("version").and_then(|v| v.as_str()).unwrap_or("0.0.0").to_string();
+            let ver = data
+                .get("version")
+                .and_then(|v| v.as_str())
+                .unwrap_or("0.0.0")
+                .to_string();
             let lic = extract_license_str(&data);
             return Some((ver, lic));
         }
@@ -220,7 +258,9 @@ fn extract_license_str(data: &Value) -> String {
                 if let Some(s) = l.as_str() {
                     Some(s.to_string())
                 } else {
-                    l.get("type").and_then(|v| v.as_str()).map(|s| s.to_string())
+                    l.get("type")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string())
                 }
             })
             .collect();
@@ -234,14 +274,34 @@ fn extract_license_str(data: &Value) -> String {
 
 fn load_pkg_license_text(pkg_dir: &Path) -> Option<String> {
     let candidate_files = [
-        "LICENSE", "LICENSE.txt", "LICENSE.md", "LICENCE", "LICENCE.txt", "LICENCE.md",
-        "LICENSE-MIT", "LICENSE-MIT.txt", "LICENSE-MIT.md",
-        "LICENSE-APACHE", "LICENSE-APACHE.txt", "LICENSE-APACHE.md",
-        "COPYING", "COPYING.txt", "COPYING.md", "UNLICENSE",
-        "NOTICE", "NOTICE.txt", "NOTICE.md",
-        "ThirdPartyNotices", "ThirdPartyNotices.txt", "ThirdPartyNotices.md",
-        "THIRD-PARTY-LICENSES", "THIRD-PARTY-LICENSES.txt", "THIRD-PARTY-LICENSES.md",
-        "THIRD-PARTY-NOTICES", "THIRD-PARTY-NOTICES.txt", "THIRD-PARTY-NOTICES.md",
+        "LICENSE",
+        "LICENSE.txt",
+        "LICENSE.md",
+        "LICENCE",
+        "LICENCE.txt",
+        "LICENCE.md",
+        "LICENSE-MIT",
+        "LICENSE-MIT.txt",
+        "LICENSE-MIT.md",
+        "LICENSE-APACHE",
+        "LICENSE-APACHE.txt",
+        "LICENSE-APACHE.md",
+        "COPYING",
+        "COPYING.txt",
+        "COPYING.md",
+        "UNLICENSE",
+        "NOTICE",
+        "NOTICE.txt",
+        "NOTICE.md",
+        "ThirdPartyNotices",
+        "ThirdPartyNotices.txt",
+        "ThirdPartyNotices.md",
+        "THIRD-PARTY-LICENSES",
+        "THIRD-PARTY-LICENSES.txt",
+        "THIRD-PARTY-LICENSES.md",
+        "THIRD-PARTY-NOTICES",
+        "THIRD-PARTY-NOTICES.txt",
+        "THIRD-PARTY-NOTICES.md",
     ];
 
     let mut texts = Vec::new();

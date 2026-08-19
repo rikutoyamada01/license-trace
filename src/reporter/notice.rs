@@ -15,7 +15,7 @@ impl NoticeReporter {
         out.push_str("| :--- | :--- | :--- | :--- | :--- |\n");
 
         let mut packages = graph.all_packages();
-        packages.sort_by(|a, b| a.id.name.to_lowercase().cmp(&b.id.name.to_lowercase()));
+        packages.sort_by_key(|a| a.id.name.to_lowercase());
 
         for pkg in &packages {
             if pkg.id == graph.root_id {
@@ -37,7 +37,7 @@ impl NoticeReporter {
             out.push_str(&format!(
                 "| [**{}**](#{}) | `{}` | `{}` | {} | {} |\n",
                 pkg.id.name,
-                pkg.id.to_string_repr().replace('@', "-").replace('.', "-"),
+                pkg.id.to_string_repr().replace(['@', '.'], "-"),
                 pkg.id.version,
                 pkg.license.raw,
                 scope_str,
@@ -56,7 +56,7 @@ impl NoticeReporter {
                 continue;
             }
 
-            let anchor = pkg.id.to_string_repr().replace('@', "-").replace('.', "-");
+            let anchor = pkg.id.to_string_repr().replace(['@', '.'], "-");
             out.push_str(&format!("<a id=\"{}\"></a>\n", anchor));
             out.push_str(&format!("### {} `{}`\n\n", pkg.id.name, pkg.id.version));
             out.push_str(&format!("- **Declared License:** `{}`\n", pkg.license.raw));
@@ -66,7 +66,7 @@ impl NoticeReporter {
             if let Some(desc) = &pkg.description {
                 out.push_str(&format!("- **Description:** {}\n", desc));
             }
-            out.push_str("\n");
+            out.push('\n');
 
             if let Some(text) = &pkg.license_text {
                 out.push_str("```text\n");

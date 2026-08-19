@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::model::LicenseCategory;
+use serde::{Deserialize, Serialize};
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -18,17 +18,18 @@ impl PolicyPreset {
         match self {
             PolicyPreset::Permissive => matches!(category, LicenseCategory::Permissive),
             PolicyPreset::CommercialFriendly => {
-                matches!(category, LicenseCategory::Permissive | LicenseCategory::WeakCopyleft)
-            }
-            PolicyPreset::Strict => {
-                !matches!(
+                matches!(
                     category,
-                    LicenseCategory::StrongCopyleft
-                        | LicenseCategory::NetworkCopyleft
-                        | LicenseCategory::NonCommercial
-                        | LicenseCategory::Proprietary
+                    LicenseCategory::Permissive | LicenseCategory::WeakCopyleft
                 )
             }
+            PolicyPreset::Strict => !matches!(
+                category,
+                LicenseCategory::StrongCopyleft
+                    | LicenseCategory::NetworkCopyleft
+                    | LicenseCategory::NonCommercial
+                    | LicenseCategory::Proprietary
+            ),
         }
     }
 }

@@ -10,7 +10,10 @@ impl AuditReporter {
     pub fn render_terminal(report: &CompatibilityReport, graph: &DependencyGraph) {
         println!();
         println!("=== License Trace & Compliance Audit ===");
-        println!("Target Outbound License : {}", report.outbound_license.bold().cyan());
+        println!(
+            "Target Outbound License : {}",
+            report.outbound_license.bold().cyan()
+        );
 
         let status_str = match report.status {
             CompatibilityStatus::Compatible => "[COMPATIBLE]".green().bold().to_string(),
@@ -46,18 +49,37 @@ impl AuditReporter {
 
         // 3. 義務・制約の集約
         println!("--- Obligations (Lower Bound) ---");
-        let comm_str = if report.obligations.commercial_use_allowed { "Allowed".green().to_string() } else { "PROHIBITED".red().to_string() };
-        let dist_str = if report.obligations.distribution_allowed { "Allowed".green().to_string() } else { "Restricted".red().to_string() };
+        let comm_str = if report.obligations.commercial_use_allowed {
+            "Allowed".green().to_string()
+        } else {
+            "PROHIBITED".red().to_string()
+        };
+        let dist_str = if report.obligations.distribution_allowed {
+            "Allowed".green().to_string()
+        } else {
+            "Restricted".red().to_string()
+        };
         let notice_str = if report.obligations.notice_required {
-            format!("Required ({} packages require attribution)", report.obligations.notice_package_count).yellow().to_string()
+            format!(
+                "Required ({} packages require attribution)",
+                report.obligations.notice_package_count
+            )
+            .yellow()
+            .to_string()
         } else {
             "Not required".green().to_string()
         };
         let disc_str = match report.obligations.worst_source_disclosure {
             SourceDisclosureLevel::None => "None (Permissive)".green().to_string(),
-            SourceDisclosureLevel::LibraryLevel => "Library Level (Weak Copyleft)".yellow().to_string(),
-            SourceDisclosureLevel::ProjectLevel => "Project Level (Strong Copyleft)".red().to_string(),
-            SourceDisclosureLevel::NetworkLevel => "Network Level (AGPL/Network Copyleft)".red().to_string(),
+            SourceDisclosureLevel::LibraryLevel => {
+                "Library Level (Weak Copyleft)".yellow().to_string()
+            }
+            SourceDisclosureLevel::ProjectLevel => {
+                "Project Level (Strong Copyleft)".red().to_string()
+            }
+            SourceDisclosureLevel::NetworkLevel => {
+                "Network Level (AGPL/Network Copyleft)".red().to_string()
+            }
         };
 
         println!("  Commercial Use       : {}", comm_str);
@@ -65,14 +87,24 @@ impl AuditReporter {
         println!("  Copyright / Notice   : {}", notice_str);
         if report.obligations.notice_required {
             // 代表的なライセンス内訳を表示
-            let sample_lics = report.obligations.notice_requiring_licenses
+            let sample_lics = report
+                .obligations
+                .notice_requiring_licenses
                 .iter()
                 .take(6)
                 .map(|(lic, count)| format!("{} ({})", lic, count))
                 .collect::<Vec<_>>()
                 .join(", ");
-            let more_str = if report.obligations.notice_requiring_licenses.len() > 6 { ", ..." } else { "" };
-            println!("    -> Required by     : {}{}", sample_lics.dimmed(), more_str.dimmed());
+            let more_str = if report.obligations.notice_requiring_licenses.len() > 6 {
+                ", ..."
+            } else {
+                ""
+            };
+            println!(
+                "    -> Required by     : {}{}",
+                sample_lics.dimmed(),
+                more_str.dimmed()
+            );
             println!("    -> Action          : {}", "Include original copyright notices & license texts in your distributed binary/release (e.g. THIRD_PARTY_LICENSES)".cyan());
         }
         println!("  Source Disclosure    : {}", disc_str);
@@ -90,7 +122,11 @@ impl AuditReporter {
                 );
                 let paths = graph.find_all_paths_to(&pkg.id.name);
                 for (i, p) in paths.iter().enumerate() {
-                    let path_str = p.iter().map(|id| id.to_string_repr()).collect::<Vec<_>>().join(" -> ");
+                    let path_str = p
+                        .iter()
+                        .map(|id| id.to_string_repr())
+                        .collect::<Vec<_>>()
+                        .join(" -> ");
                     println!("    Path {:02}: {}", i + 1, path_str);
                 }
             }
@@ -108,7 +144,11 @@ impl AuditReporter {
                     pkg.license.category.label()
                 );
                 if let Some(shortest) = graph.find_shortest_path_to(&pkg.id.name) {
-                    let path_str = shortest.iter().map(|id| id.to_string_repr()).collect::<Vec<_>>().join(" -> ");
+                    let path_str = shortest
+                        .iter()
+                        .map(|id| id.to_string_repr())
+                        .collect::<Vec<_>>()
+                        .join(" -> ");
                     println!("    Path: {}", path_str.dimmed());
                 }
             }
@@ -125,7 +165,11 @@ impl AuditReporter {
                     pkg.license.raw.yellow()
                 );
                 if let Some(shortest) = graph.find_shortest_path_to(&pkg.id.name) {
-                    let path_str = shortest.iter().map(|id| id.to_string_repr()).collect::<Vec<_>>().join(" -> ");
+                    let path_str = shortest
+                        .iter()
+                        .map(|id| id.to_string_repr())
+                        .collect::<Vec<_>>()
+                        .join(" -> ");
                     println!("    Path: {}", path_str.dimmed());
                 }
             }

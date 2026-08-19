@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use super::license::LicenseAnalysis;
+use serde::{Deserialize, Serialize};
 
 /// パッケージの依存種別
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -68,7 +68,12 @@ pub struct PackageInfo {
 }
 
 impl PackageInfo {
-    pub fn new(id: PackageId, raw_license: &str, dep_type: DependencyType, scope: DependencyScope) -> Self {
+    pub fn new(
+        id: PackageId,
+        raw_license: &str,
+        dep_type: DependencyType,
+        scope: DependencyScope,
+    ) -> Self {
         let license = LicenseAnalysis::parse(raw_license);
         Self {
             id,

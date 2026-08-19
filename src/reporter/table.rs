@@ -33,9 +33,15 @@ impl TableReporter {
             }
 
             let cat_cell = match pkg.license.category {
-                LicenseCategory::Permissive => Cell::new(pkg.license.category.label()).fg(Color::Green),
-                LicenseCategory::WeakCopyleft => Cell::new(pkg.license.category.label()).fg(Color::Yellow),
-                LicenseCategory::StrongCopyleft | LicenseCategory::NetworkCopyleft | LicenseCategory::NonCommercial => {
+                LicenseCategory::Permissive => {
+                    Cell::new(pkg.license.category.label()).fg(Color::Green)
+                }
+                LicenseCategory::WeakCopyleft => {
+                    Cell::new(pkg.license.category.label()).fg(Color::Yellow)
+                }
+                LicenseCategory::StrongCopyleft
+                | LicenseCategory::NetworkCopyleft
+                | LicenseCategory::NonCommercial => {
                     Cell::new(pkg.license.category.label()).fg(Color::Red)
                 }
                 _ => Cell::new(pkg.license.category.label()).fg(Color::Cyan),

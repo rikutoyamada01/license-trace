@@ -46,10 +46,8 @@ impl GoModResolver {
 
         // go list -m -json は連続した JSON オブジェクトを出力する
         let deserializer = serde_json::Deserializer::from_str(&stdout);
-        for value in deserializer.into_iter::<Value>() {
-            if let Ok(val) = value {
-                modules.push(val);
-            }
+        for val in deserializer.into_iter::<Value>().flatten() {
+            modules.push(val);
         }
 
         if modules.is_empty() {
@@ -57,8 +55,14 @@ impl GoModResolver {
         }
 
         let main_mod = &modules[0];
-        let main_path = main_mod.get("Path").and_then(|v| v.as_str()).unwrap_or("main");
-        let main_ver = main_mod.get("Version").and_then(|v| v.as_str()).unwrap_or("0.0.0");
+        let main_path = main_mod
+            .get("Path")
+            .and_then(|v| v.as_str())
+            .unwrap_or("main");
+        let main_ver = main_mod
+            .get("Version")
+            .and_then(|v| v.as_str())
+            .unwrap_or("0.0.0");
         let main_dir = main_mod.get("Dir").and_then(|v| v.as_str());
 
         let main_lic = if let Some(d) = main_dir {
@@ -88,7 +92,11 @@ impl GoModResolver {
                 "UNKNOWN".to_string()
             };
 
-            let dep_type = if is_indirect { DependencyType::Transitive } else { DependencyType::Direct };
+            let dep_type = if is_indirect {
+                DependencyType::Transitive
+            } else {
+                DependencyType::Direct
+            };
             let pkg = PackageInfo::new(
                 PackageId::new(path, ver),
                 &lic,
@@ -126,12 +134,13 @@ impl GoModResolver {
             if trimmed == "require (" {
                 in_require = true;
                 continue;
-            } else if trimmed == ")" && in_require {
-                in_require = false;
-                continue;
             }
 
             if in_require {
+                if trimmed == ")" {
+                    in_require = false;
+                    continue;
+                }
                 let parts: Vec<&str> = trimmed.split_whitespace().collect();
                 if parts.len() >= 2 {
                     let name = parts[0].to_string();
@@ -140,7 +149,7 @@ impl GoModResolver {
                     deps.push((name, ver, is_indirect));
                 }
             } else if let Some(req_line) = trimmed.strip_prefix("require ") {
-                let parts: Vec<&str> = req_line.trim().split_whitespace().collect();
+                let parts: Vec<&str> = req_line.split_whitespace().collect();
                 if parts.len() >= 2 {
                     let name = parts[0].to_string();
                     let ver = parts[1].to_string();
@@ -150,7 +159,8 @@ impl GoModResolver {
             }
         }
 
-        let root_lic = detect_license_in_directory(project_dir).unwrap_or_else(|| "UNKNOWN".to_string());
+        let root_lic =
+            detect_license_in_directory(project_dir).unwrap_or_else(|| "UNKNOWN".to_string());
         let root_pkg = PackageInfo::new(
             PackageId::new(&root_name, "0.0.0"),
             &root_lic,
@@ -161,7 +171,11 @@ impl GoModResolver {
         let mut graph = DependencyGraph::new(root_pkg);
 
         for (name, ver, is_indirect) in deps {
-            let dep_type = if is_indirect { DependencyType::Transitive } else { DependencyType::Direct };
+            let dep_type = if is_indirect {
+                DependencyType::Transitive
+            } else {
+                DependencyType::Direct
+            };
             let pkg = PackageInfo::new(
                 PackageId::new(&name, &ver),
                 "UNKNOWN",
@@ -178,8 +192,14 @@ impl GoModResolver {
 /// ディレクトリ内の LICENSE ファイルからライセンスを特定
 fn detect_license_in_directory(dir: &Path) -> Option<String> {
     let license_filenames = [
-        "LICENSE", "LICENSE.txt", "LICENSE.md", "LICENSE.rst",
-        "LICENCE", "LICENCE.txt", "LICENCE.md", "COPYING",
+        "LICENSE",
+        "LICENSE.txt",
+        "LICENSE.md",
+        "LICENSE.rst",
+        "LICENCE",
+        "LICENCE.txt",
+        "LICENCE.md",
+        "COPYING",
     ];
 
     for name in &license_filenames {
@@ -187,11 +207,15 @@ fn detect_license_in_directory(dir: &Path) -> Option<String> {
         if p.exists() {
             if let Ok(content) = fs::read_to_string(&p) {
                 let upper = content.to_uppercase();
-                if upper.contains("MIT LICENSE") || upper.contains("PERMISSION IS HEREBY GRANTED, FREE OF CHARGE") {
+                if upper.contains("MIT LICENSE")
+                    || upper.contains("PERMISSION IS HEREBY GRANTED, FREE OF CHARGE")
+                {
                     return Some("MIT".to_string());
                 } else if upper.contains("APACHE LICENSE") && upper.contains("VERSION 2.0") {
                     return Some("Apache-2.0".to_string());
-                } else if upper.contains("BSD 3-CLAUSE") || upper.contains("REDISTRIBUTION AND USE IN SOURCE AND BINARY") {
+                } else if upper.contains("BSD 3-CLAUSE")
+                    || upper.contains("REDISTRIBUTION AND USE IN SOURCE AND BINARY")
+                {
                     return Some("BSD-3-Clause".to_string());
                 } else if upper.contains("BSD 2-CLAUSE") {
                     return Some("BSD-2-Clause".to_string());

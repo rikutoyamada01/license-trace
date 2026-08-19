@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
-use crate::model::{DependencyGraph, LicenseAnalysis, LicenseCategory, SourceDisclosureLevel};
 use super::obligations::AggregateObligations;
+use crate::model::{DependencyGraph, LicenseAnalysis, LicenseCategory, SourceDisclosureLevel};
+use serde::{Deserialize, Serialize};
 
 /// 公開ライセンスに対する適合性判定結果
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -76,23 +76,23 @@ impl CompatibilityReport {
                     );
                 }
             }
-            LicenseCategory::WeakCopyleft => {
-                if obs.worst_source_disclosure >= SourceDisclosureLevel::ProjectLevel {
-                    status = CompatibilityStatus::Incompatible;
-                    findings.push(format!(
-                        "Incompatible Copyleft: Project contains Strong/Network Copyleft dependencies (e.g., GPL/AGPL). Distributing under Weak Copyleft '{}' is not compatible.",
-                        outbound_license
-                    ));
-                }
+            LicenseCategory::WeakCopyleft
+                if obs.worst_source_disclosure >= SourceDisclosureLevel::ProjectLevel =>
+            {
+                status = CompatibilityStatus::Incompatible;
+                findings.push(format!(
+                    "Incompatible Copyleft: Project contains Strong/Network Copyleft dependencies (e.g., GPL/AGPL). Distributing under Weak Copyleft '{}' is not compatible.",
+                    outbound_license
+                ));
             }
-            LicenseCategory::StrongCopyleft => {
-                if obs.worst_source_disclosure >= SourceDisclosureLevel::NetworkLevel {
-                    status = CompatibilityStatus::Incompatible;
-                    findings.push(format!(
-                        "Network Copyleft Notice: Project contains Network Copyleft dependencies (e.g., AGPL/SSPL). Distributing under '{}' is incompatible if operated over a network (AGPL/SSPL requires network-triggered source disclosure).",
-                        outbound_license
-                    ));
-                }
+            LicenseCategory::StrongCopyleft
+                if obs.worst_source_disclosure >= SourceDisclosureLevel::NetworkLevel =>
+            {
+                status = CompatibilityStatus::Incompatible;
+                findings.push(format!(
+                    "Network Copyleft Notice: Project contains Network Copyleft dependencies (e.g., AGPL/SSPL). Distributing under '{}' is incompatible if operated over a network (AGPL/SSPL requires network-triggered source disclosure).",
+                    outbound_license
+                ));
             }
             _ => {}
         }
