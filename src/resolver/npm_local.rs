@@ -84,16 +84,18 @@ impl NpmLocalResolver {
                     DependencyScope::Production
                 };
 
-                // ライセンス取得（lockfile内のlicense、なければnode_modules内のpackage.jsonから取得）
                 let mut license_str = extract_license_str(data);
+                let pkg_dir = project_dir.join(rel_path);
                 if license_str == "UNKNOWN" {
-                    let node_pkg_path = project_dir.join(rel_path).join("package.json");
+                    let node_pkg_path = pkg_dir.join("package.json");
                     if let Ok(content) = fs::read_to_string(&node_pkg_path) {
                         if let Ok(parsed) = serde_json::from_str::<Value>(&content) {
                             license_str = extract_license_str(&parsed);
                         }
                     }
                 }
+
+                let license_text = load_pkg_license_text(&pkg_dir);
 
                 let is_direct = !rel_path.contains("node_modules/") || rel_path.matches("node_modules/").count() == 1;
                 let dep_type = if is_direct {
@@ -103,7 +105,9 @@ impl NpmLocalResolver {
                 };
 
                 let id = PackageId::new(&pkg_name, version);
-                let info = PackageInfo::new(id.clone(), &license_str, dep_type, scope);
+                let mut info = PackageInfo::new(id.clone(), &license_str, dep_type, scope);
+                info.manifest_path = Some(pkg_dir.to_string_lossy().to_string());
+                info.license_text = license_text;
                 graph.get_or_add_node(info);
                 path_to_id.insert(rel_path.clone(), id);
             }
@@ -226,4 +230,36 @@ fn extract_license_str(data: &Value) -> String {
     }
 
     "UNKNOWN".to_string()
+}
+
+fn load_pkg_license_text(pkg_dir: &Path) -> Option<String> {
+    let candidate_files = [
+        "LICENSE", "LICENSE.txt", "LICENSE.md", "LICENCE", "LICENCE.txt", "LICENCE.md",
+        "LICENSE-MIT", "LICENSE-MIT.txt", "LICENSE-MIT.md",
+        "LICENSE-APACHE", "LICENSE-APACHE.txt", "LICENSE-APACHE.md",
+        "COPYING", "COPYING.txt", "COPYING.md", "UNLICENSE",
+        "NOTICE", "NOTICE.txt", "NOTICE.md",
+        "ThirdPartyNotices", "ThirdPartyNotices.txt", "ThirdPartyNotices.md",
+        "THIRD-PARTY-LICENSES", "THIRD-PARTY-LICENSES.txt", "THIRD-PARTY-LICENSES.md",
+        "THIRD-PARTY-NOTICES", "THIRD-PARTY-NOTICES.txt", "THIRD-PARTY-NOTICES.md",
+    ];
+
+    let mut texts = Vec::new();
+    for fname in &candidate_files {
+        let p = pkg_dir.join(fname);
+        if p.is_file() {
+            if let Ok(content) = fs::read_to_string(&p) {
+                let trimmed = content.trim();
+                if !trimmed.is_empty() {
+                    texts.push(format!("--- File: {} ---\n{}", fname, trimmed));
+                }
+            }
+        }
+    }
+
+    if texts.is_empty() {
+        None
+    } else {
+        Some(texts.join("\n\n"))
+    }
 }

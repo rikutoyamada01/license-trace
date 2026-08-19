@@ -219,10 +219,15 @@ fn load_crate_license_text(crate_dir: &Path) -> Option<String> {
     let mut texts = Vec::new();
 
     let candidate_files = [
-        "LICENSE", "LICENSE.txt", "LICENSE.md", "LICENCE", "LICENCE.txt",
+        "LICENSE", "LICENSE.txt", "LICENSE.md", "LICENCE", "LICENCE.txt", "LICENCE.md",
         "LICENSE-MIT", "LICENSE-MIT.txt", "LICENSE-MIT.md",
         "LICENSE-APACHE", "LICENSE-APACHE.txt", "LICENSE-APACHE.md",
-        "LICENSE-BOOST", "COPYING", "COPYING.txt", "UNLICENSE",
+        "LICENSE-BOOST", "LICENSE-BSL", "COPYING", "COPYING.txt", "COPYING.md", "UNLICENSE",
+        "NOTICE", "NOTICE.txt", "NOTICE.md",
+        "ThirdPartyNotices", "ThirdPartyNotices.txt", "ThirdPartyNotices.md",
+        "THIRD-PARTY-LICENSES", "THIRD-PARTY-LICENSES.txt", "THIRD-PARTY-LICENSES.md",
+        "THIRD-PARTY-NOTICES", "THIRD-PARTY-NOTICES.txt", "THIRD-PARTY-NOTICES.md",
+        "THIRDPARTY", "THIRDPARTY.txt", "THIRDPARTY.md",
     ];
 
     for fname in &candidate_files {
