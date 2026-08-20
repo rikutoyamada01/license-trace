@@ -54,6 +54,19 @@ impl PythonResolver {
             }
         }
 
+        // 3. uv.lock のパース (存在する場合)
+        let uv_lock_path = project_dir.join("uv.lock");
+        if uv_lock_path.exists() {
+            if let Ok(lock_content) = fs::read_to_string(&uv_lock_path) {
+                let lock_deps = parse_uv_lock(&lock_content);
+                for dep in lock_deps {
+                    if dep.0 != root_name && !direct_deps.iter().any(|(n, _)| n == &dep.0) {
+                        direct_deps.push(dep);
+                    }
+                }
+            }
+        }
+
         let root_pkg = PackageInfo::new(
             PackageId::new(&root_name, &root_ver),
             &root_lic,
@@ -63,13 +76,33 @@ impl PythonResolver {
 
         let mut graph = DependencyGraph::new(root_pkg);
 
-        // 3. 各依存パッケージのライセンス解決 (ローカル site-packages または PyPI API)
+        // 4. 各依存パッケージのライセンス解決 (ローカル site-packages または PyPI API)
         for (dep_name, dep_ver) in direct_deps {
-            let lic = find_python_package_license(project_dir, &dep_name)
-                .unwrap_or_else(|| "UNKNOWN".to_string());
+            let mut lic = find_python_package_license(project_dir, &dep_name);
+
+            // ローカルに見つからない場合、PyPI JSON API からオンライン補完
+            if lic.is_none() {
+                if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                    let online_lic = tokio::task::block_in_place(|| {
+                        handle.block_on(async {
+                            Self::fetch_pypi_package_info(&dep_name)
+                                .await
+                                .ok()
+                                .map(|p| p.license.raw)
+                        })
+                    });
+                    if let Some(l) = online_lic {
+                        if !l.is_empty() && !l.eq_ignore_ascii_case("UNKNOWN") {
+                            lic = Some(l);
+                        }
+                    }
+                }
+            }
+
+            let final_lic = lic.unwrap_or_else(|| "UNKNOWN".to_string());
             let pkg_info = PackageInfo::new(
                 PackageId::new(&dep_name, &dep_ver),
-                &lic,
+                &final_lic,
                 DependencyType::Direct,
                 DependencyScope::Production,
             );
@@ -80,7 +113,6 @@ impl PythonResolver {
     }
 
     /// 単一パッケージの情報を PyPI JSON API から取得
-    #[allow(dead_code)]
     pub async fn fetch_pypi_package_info(pkg_name: &str) -> Result<PackageInfo> {
         let url = format!("https://pypi.org/pypi/{}/json", pkg_name);
         let client = reqwest::Client::builder()
@@ -110,22 +142,51 @@ impl PythonResolver {
             .and_then(|v| v.as_str())
             .unwrap_or("0.0.0");
 
-        let mut lic_str = info
+        let license_expr = info
+            .get("license_expression")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim();
+
+        let raw_lic = info
             .get("license")
             .and_then(|v| v.as_str())
             .unwrap_or("")
-            .trim()
-            .to_string();
+            .trim();
 
-        // classifiers からライセンスを抽出 (license フィールドが空または UNKNOWN の場合)
-        if lic_str.is_empty() || lic_str.eq_ignore_ascii_case("UNKNOWN") {
+        let mut lic_str = if !license_expr.is_empty() {
+            license_expr.to_string()
+        } else if !raw_lic.is_empty()
+            && !raw_lic.eq_ignore_ascii_case("UNKNOWN")
+            && !raw_lic.contains('\n')
+            && raw_lic.len() <= 40
+        {
+            raw_lic.to_string()
+        } else {
+            String::new()
+        };
+
+        // classifiers からライセンスを抽出
+        if lic_str.is_empty() {
             if let Some(classifiers) = info.get("classifiers").and_then(|v| v.as_array()) {
                 for c in classifiers {
                     if let Some(s) = c.as_str() {
                         if s.starts_with("License :: OSI Approved :: ") {
-                            lic_str = s
+                            let spdx_cand = s
                                 .trim_start_matches("License :: OSI Approved :: ")
-                                .to_string();
+                                .trim();
+                            let mapped = match spdx_cand {
+                                "Apache Software License" => "Apache-2.0",
+                                "MIT License" => "MIT",
+                                "BSD License" => "BSD-3-Clause",
+                                "Mozilla Public License 2.0 (MPL 2.0)" => "MPL-2.0",
+                                "GNU General Public License v3 (GPLv3)" => "GPL-3.0-only",
+                                "GNU General Public License v2 (GPLv2)" => "GPL-2.0-only",
+                                "GNU Lesser General Public License v3 (LGPLv3)" => "LGPL-3.0-only",
+                                "ISC License (ISCL)" => "ISC",
+                                other => other,
+                            };
+                            lic_str = mapped.to_string();
                             break;
                         }
                     }
@@ -369,6 +430,38 @@ fn parse_python_dep_spec(spec: &str) -> (String, String) {
     (spec.trim().to_string(), "*".to_string())
 }
 
+fn parse_uv_lock(content: &str) -> Vec<(String, String)> {
+    let mut packages = Vec::new();
+    let mut current_name = None;
+    let mut current_version = None;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed == "[[package]]" {
+            if let (Some(n), Some(v)) = (current_name.take(), current_version.take()) {
+                packages.push((n, v));
+            }
+            continue;
+        }
+
+        if let Some((k, v)) = trimmed.split_once('=') {
+            let k = k.trim();
+            let v = v.trim().trim_matches('"').trim_matches('\'').trim();
+            if k == "name" {
+                current_name = Some(v.to_string());
+            } else if k == "version" {
+                current_version = Some(v.to_string());
+            }
+        }
+    }
+
+    if let (Some(n), Some(v)) = (current_name, current_version) {
+        packages.push((n, v));
+    }
+
+    packages
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -399,6 +492,30 @@ dependencies = [
         assert_eq!(parsed.dependencies[1].0, "matplotlib");
         assert_eq!(parsed.dependencies[2].0, "numpy");
         assert_eq!(parsed.dependencies[3].0, "torch");
+    }
+
+    #[test]
+    fn test_parse_uv_lock() {
+        let content = r#"
+version = 1
+revision = 1
+
+[[package]]
+name = "numpy"
+version = "2.4.6"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "torch"
+version = "2.4.0"
+source = { registry = "https://pypi.org/simple" }
+"#;
+        let packages = parse_uv_lock(content);
+        assert_eq!(packages.len(), 2);
+        assert_eq!(packages[0].0, "numpy");
+        assert_eq!(packages[0].1, "2.4.6");
+        assert_eq!(packages[1].0, "torch");
+        assert_eq!(packages[1].1, "2.4.0");
     }
 }
 
