@@ -249,8 +249,9 @@ fn parse_simple_pyproject(content: &str) -> SimplePyproject {
     let mut license = None;
     let mut dependencies = Vec::new();
 
-    let mut in_dependencies = false;
-    let mut in_project = false;
+    let mut in_dependencies_array = false;
+    let mut in_project_section = false;
+    let mut in_dep_table = false;
 
     for line in content.lines() {
         let trimmed = line.trim();
@@ -258,45 +259,17 @@ fn parse_simple_pyproject(content: &str) -> SimplePyproject {
             continue;
         }
 
-        if trimmed == "[project]" || trimmed == "[tool.poetry]" {
-            in_project = true;
-            in_dependencies = false;
-            continue;
-        } else if trimmed.starts_with('[') && trimmed.ends_with(']') {
-            in_dependencies =
-                trimmed == "[project.dependencies]" || trimmed == "[tool.poetry.dependencies]";
-            in_project = false;
+        // Section header
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            in_dependencies_array = false;
+            in_project_section = trimmed == "[project]" || trimmed == "[tool.poetry]";
+            in_dep_table = trimmed == "[project.dependencies]" || trimmed == "[tool.poetry.dependencies]";
             continue;
         }
 
-        if in_project {
-            if let Some((k, v)) = trimmed.split_once('=') {
-                let k = k.trim();
-                let v = v.trim().trim_matches('"').trim_matches('\'').trim();
-                if k == "name" {
-                    name = Some(v.to_string());
-                } else if k == "version" {
-                    version = Some(v.to_string());
-                } else if k == "license" {
-                    license = Some(v.to_string());
-                } else if k == "dependencies" && v.starts_with('[') {
-                    if v.ends_with(']') {
-                        let inner = &v[1..v.len() - 1];
-                        for item in inner.split(',') {
-                            let dep_str = item.trim().trim_matches('"').trim_matches('\'').trim();
-                            if !dep_str.is_empty() {
-                                let (d_name, d_ver) = parse_python_dep_spec(dep_str);
-                                dependencies.push((d_name, d_ver));
-                            }
-                        }
-                    } else {
-                        in_dependencies = true;
-                    }
-                }
-            }
-        } else if in_dependencies {
+        if in_dependencies_array {
             if trimmed.starts_with(']') {
-                in_dependencies = false;
+                in_dependencies_array = false;
             } else if trimmed.starts_with('"') || trimmed.starts_with('\'') {
                 let dep_str = trimmed
                     .trim_matches(',')
@@ -307,11 +280,55 @@ fn parse_simple_pyproject(content: &str) -> SimplePyproject {
                     let (d_name, d_ver) = parse_python_dep_spec(dep_str);
                     dependencies.push((d_name, d_ver));
                 }
-            } else if let Some((k, v)) = trimmed.split_once('=') {
+            }
+            continue;
+        }
+
+        if in_dep_table {
+            if let Some((k, v)) = trimmed.split_once('=') {
                 let dep_name = k.trim().to_string();
                 let dep_ver = v.trim().trim_matches('"').trim_matches('\'').to_string();
                 if dep_name != "python" {
                     dependencies.push((dep_name, dep_ver));
+                }
+            }
+            continue;
+        }
+
+        if in_project_section {
+            if let Some((k, v)) = trimmed.split_once('=') {
+                let k = k.trim();
+                let v = v.trim();
+                let v_unquoted = v.trim_matches('"').trim_matches('\'').trim();
+
+                if k == "name" {
+                    name = Some(v_unquoted.to_string());
+                } else if k == "version" {
+                    version = Some(v_unquoted.to_string());
+                } else if k == "license" {
+                    if v.starts_with('{') {
+                        if let Some((_, val)) = v.split_once("text =") {
+                            let lic_val = val.trim_matches('}').trim().trim_matches('"').trim_matches('\'').trim();
+                            license = Some(lic_val.to_string());
+                        }
+                    } else {
+                        license = Some(v_unquoted.to_string());
+                    }
+                } else if k == "dependencies" {
+                    if v.starts_with('[') {
+                        if v.ends_with(']') {
+                            let inner = &v[1..v.len() - 1];
+                            for item in inner.split(',') {
+                                let dep_str = item.trim().trim_matches('"').trim_matches('\'').trim();
+                                if !dep_str.is_empty() {
+                                    let (d_name, d_ver) = parse_python_dep_spec(dep_str);
+                                    dependencies.push((d_name, d_ver));
+                                }
+                            }
+                        } else {
+                            in_dependencies_array = true;
+                        }
+                    }
                 }
             }
         }
@@ -351,3 +368,37 @@ fn parse_python_dep_spec(spec: &str) -> (String, String) {
     }
     (spec.trim().to_string(), "*".to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_simple_pyproject_multiline() {
+        let content = r#"
+[project]
+name = "voicerecognizer"
+version = "0.1.0"
+description = "Speech recognition"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "librosa>=0.11.0",
+    "matplotlib>=3.11.0",
+    "numpy>=2.4.6",
+    "torch>=2.4.0",
+]
+"#;
+        let parsed = parse_simple_pyproject(content);
+        assert_eq!(parsed.name.as_deref(), Some("voicerecognizer"));
+        assert_eq!(parsed.version.as_deref(), Some("0.1.0"));
+        assert_eq!(parsed.license.as_deref(), Some("MIT"));
+        assert_eq!(parsed.dependencies.len(), 4);
+        assert_eq!(parsed.dependencies[0].0, "librosa");
+        assert_eq!(parsed.dependencies[1].0, "matplotlib");
+        assert_eq!(parsed.dependencies[2].0, "numpy");
+        assert_eq!(parsed.dependencies[3].0, "torch");
+    }
+}
+
