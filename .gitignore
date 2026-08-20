@@ -1,2 +1,6 @@
 /target
 /charts
+/dist
+/dist-binaries
+/release-assets
+*.whl

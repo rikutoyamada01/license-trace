@@ -1,0 +1,31 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "license-trace"
+dynamic = ["version"]
+description = "A recursive license tracer, obligations evaluator, and OSS compliance analyzer across dependency graphs"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "license-trace contributors" }]
+requires-python = ">=3.8"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Utilities",
+    "License :: OSI Approved :: MIT License",
+]
+keywords = ["license", "spdx", "compliance", "copyleft", "sbom", "cli"]
+
+[project.urls]
+Homepage = "https://github.com/rikutoyamada01/license-trace"
+Repository = "https://github.com/rikutoyamada01/license-trace"
+Documentation = "https://docs.rs/license-trace"
+
+[tool.maturin]
+bindings = "bin"
+strip = true

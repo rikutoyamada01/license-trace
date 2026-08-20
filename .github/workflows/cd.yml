@@ -1,0 +1,262 @@
+name: CD (Release & Publish)
+
+on:
+  push:
+    branches: [main, master]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+jobs:
+  check-version:
+    name: Check Version & Determine Release
+    runs-on: ubuntu-latest
+    outputs:
+      should_publish: ${{ steps.check.outputs.should_publish }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from Cargo.toml
+        id: check
+        run: |
+          VERSION=$(grep -m 1 '^version =' Cargo.toml | tr -s ' ' | cut -d '"' -f 2)
+          echo "Cargo.toml version: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          # Check if git tag already exists
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "Tag v$VERSION already exists. Skipping release."
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Tag v$VERSION does not exist yet. Will proceed with release."
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ==========================================
+  # 1. Publish to crates.io
+  # ==========================================
+  publish-crates:
+    name: Publish to crates.io
+    needs: check-version
+    if: needs.check-version.outputs.should_publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Publish to crates.io
+        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        continue-on-error: true
+
+  # ==========================================
+  # 2. Build multi-platform binaries
+  # ==========================================
+  build-binaries:
+    name: Build Binary (${{ matrix.target }})
+    needs: check-version
+    if: needs.check-version.outputs.should_publish == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary_name: license-trace
+            output_name: license-trace-x86_64-unknown-linux-gnu
+            use_cross: false
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            binary_name: license-trace
+            output_name: license-trace-aarch64-unknown-linux-gnu
+            use_cross: true
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            binary_name: license-trace
+            output_name: license-trace-x86_64-apple-darwin
+            use_cross: false
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            binary_name: license-trace
+            output_name: license-trace-aarch64-apple-darwin
+            use_cross: false
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary_name: license-trace.exe
+            output_name: license-trace-x86_64-pc-windows-msvc.exe
+            use_cross: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross (if required)
+        if: matrix.use_cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build Binary
+        run: |
+          if [ "${{ matrix.use_cross }}" = "true" ]; then
+            cross build --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
+        shell: bash
+
+      - name: Copy & Rename Artifact
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/${{ matrix.binary_name }} dist/${{ matrix.output_name }}
+        shell: bash
+
+      - name: Upload Binary Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.target }}
+          path: dist/${{ matrix.output_name }}
+          retention-days: 2
+
+  # ==========================================
+  # 3. Publish to PyPI (maturin)
+  # ==========================================
+  publish-pypi:
+    name: Publish to PyPI
+    needs: check-version
+    if: needs.check-version.outputs.should_publish == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            manylinux: auto
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            manylinux: auto
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux || 'off' }}
+          args: --release --out dist
+
+      - name: Upload PyPI wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: pypi-wheels-${{ matrix.target }}
+          path: dist/*.whl
+
+  publish-pypi-release:
+    name: Upload all wheels to PyPI
+    needs: [check-version, publish-pypi]
+    if: needs.check-version.outputs.should_publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Download wheels
+        uses: actions/download-artifact@v4
+        with:
+          pattern: pypi-wheels-*
+          merge-multiple: true
+          path: dist
+
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          packages-dir: dist
+        continue-on-error: true
+
+  # ==========================================
+  # 4. Create GitHub Release & Upload Archives
+  # ==========================================
+  publish-github-release:
+    name: Create GitHub Release
+    needs: [check-version, build-binaries]
+    if: needs.check-version.outputs.should_publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: binary-*
+          merge-multiple: true
+          path: dist-binaries
+
+      - name: Package release archives & compute checksums
+        run: |
+          mkdir -p release-assets
+          VERSION="${{ needs.check-version.outputs.version }}"
+
+          # Packaging Unix binaries as tar.gz
+          for target in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin; do
+            bin="dist-binaries/license-trace-$target"
+            if [ -f "$bin" ]; then
+              chmod +x "$bin"
+              cp "$bin" license-trace
+              tar -czf "release-assets/license-trace-v${VERSION}-${target}.tar.gz" license-trace
+              rm license-trace
+            fi
+          done
+
+          # Packaging Windows binary as zip
+          if [ -f "dist-binaries/license-trace-x86_64-pc-windows-msvc.exe" ]; then
+            cp "dist-binaries/license-trace-x86_64-pc-windows-msvc.exe" license-trace.exe
+            zip "release-assets/license-trace-v${VERSION}-x86_64-pc-windows-msvc.zip" license-trace.exe
+            rm license-trace.exe
+          fi
+
+          # Generate SHA-256 checksums
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt
+          cd ..
+
+      - name: Create Git Tag & GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ needs.check-version.outputs.version }}"
+          name: "Release v${{ needs.check-version.outputs.version }}"
+          generate_release_notes: true
+          files: |
+            release-assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
