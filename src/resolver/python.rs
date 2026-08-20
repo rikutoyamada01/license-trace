@@ -172,9 +172,8 @@ impl PythonResolver {
                 for c in classifiers {
                     if let Some(s) = c.as_str() {
                         if s.starts_with("License :: OSI Approved :: ") {
-                            let spdx_cand = s
-                                .trim_start_matches("License :: OSI Approved :: ")
-                                .trim();
+                            let spdx_cand =
+                                s.trim_start_matches("License :: OSI Approved :: ").trim();
                             let mapped = match spdx_cand {
                                 "Apache Software License" => "Apache-2.0",
                                 "MIT License" => "MIT",
@@ -324,7 +323,8 @@ fn parse_simple_pyproject(content: &str) -> SimplePyproject {
         if trimmed.starts_with('[') && trimmed.ends_with(']') {
             in_dependencies_array = false;
             in_project_section = trimmed == "[project]" || trimmed == "[tool.poetry]";
-            in_dep_table = trimmed == "[project.dependencies]" || trimmed == "[tool.poetry.dependencies]";
+            in_dep_table =
+                trimmed == "[project.dependencies]" || trimmed == "[tool.poetry.dependencies]";
             continue;
         }
 
@@ -369,26 +369,29 @@ fn parse_simple_pyproject(content: &str) -> SimplePyproject {
                 } else if k == "license" {
                     if v.starts_with('{') {
                         if let Some((_, val)) = v.split_once("text =") {
-                            let lic_val = val.trim_matches('}').trim().trim_matches('"').trim_matches('\'').trim();
+                            let lic_val = val
+                                .trim_matches('}')
+                                .trim()
+                                .trim_matches('"')
+                                .trim_matches('\'')
+                                .trim();
                             license = Some(lic_val.to_string());
                         }
                     } else {
                         license = Some(v_unquoted.to_string());
                     }
-                } else if k == "dependencies" {
-                    if v.starts_with('[') {
-                        if v.ends_with(']') {
-                            let inner = &v[1..v.len() - 1];
-                            for item in inner.split(',') {
-                                let dep_str = item.trim().trim_matches('"').trim_matches('\'').trim();
-                                if !dep_str.is_empty() {
-                                    let (d_name, d_ver) = parse_python_dep_spec(dep_str);
-                                    dependencies.push((d_name, d_ver));
-                                }
+                } else if k == "dependencies" && v.starts_with('[') {
+                    if v.ends_with(']') {
+                        let inner = &v[1..v.len() - 1];
+                        for item in inner.split(',') {
+                            let dep_str = item.trim().trim_matches('"').trim_matches('\'').trim();
+                            if !dep_str.is_empty() {
+                                let (d_name, d_ver) = parse_python_dep_spec(dep_str);
+                                dependencies.push((d_name, d_ver));
                             }
-                        } else {
-                            in_dependencies_array = true;
                         }
+                    } else {
+                        in_dependencies_array = true;
                     }
                 }
             }
@@ -518,4 +521,3 @@ source = { registry = "https://pypi.org/simple" }
         assert_eq!(packages[1].1, "2.4.0");
     }
 }
-

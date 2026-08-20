@@ -32,28 +32,60 @@
 ---
 
 ## インストール
+お使いの環境やお好みのパッケージマネージャーに合わせてインストールできます：
 
-### 前提条件
-- Rust 1.75 以上 (`cargo`)
+### 1. Cargo 経由（Rust）
+```bash
+cargo install license-trace
+```
 
-### ソースコードからビルド
+### 2. pip 経由（Python）
+```bash
+pip install license-trace
+```
+
+### 3. ビルド済みバイナリのダウンロード（GitHub Releases）
+[GitHub Releases 最新版](https://github.com/rikutoyamada01/license-trace/releases/latest) より、お使いの OS・CPU に適したアーカイブをダウンロードして展開するだけで利用可能です：
+- **Linux**: `license-trace-v*-x86_64-unknown-linux-gnu.tar.gz` / `aarch64`
+- **macOS**: `license-trace-v*-aarch64-apple-darwin.tar.gz` (Apple Silicon Mシリーズ) / `x86_64` (Intel)
+- **Windows**: `license-trace-v*-x86_64-pc-windows-msvc.zip`
+
+### 4. ソースコードから直接インストール
 ```bash
 git clone https://github.com/rikutoyamada01/license-trace.git
 cd license-trace
-cargo build --release
+cargo install --path .
 ```
-ビルドされた実行ファイルは `./target/release/license-trace` に配置されます。
 
 ---
 
-## 使い方
+## 使い方・主要コマンド
 
-### 1. 統一された `trace` コマンド
+### 1. プロジェクトのコンプライアンス監査 (`audit` または `trace .`)
+
+ローカルプロジェクトのディレクトリを対象に、ライセンスの互換性、義務要件（著作権表示・ソースコード開示等）を監査します（デフォルトの公開対象ライセンスは `MIT`）：
+
+```bash
+# カレントディレクトリを監査
+license-trace audit
+
+# パスと想定公開ライセンスを指定して監査
+license-trace audit -p ./my-project --outbound "MIT OR Apache-2.0"
+
+# 開発用依存（devDependencies 等）を除外し、本番配布物のみを監査
+license-trace audit --prod-only
+
+# CI ゲート: 非互換ライセンスや未確認ライセンスが存在する場合に終了コードで検知
+license-trace audit --fail-on-incompatible --fail-on-unknown
+```
+
+---
+
+### 2. 統一された万能トレーサー (`trace`)
 
 `trace` コマンドは、指定されたターゲットがローカルディレクトリ、レジストリパッケージ名、Git URL のいずれであるかを自動判別します。
 
 #### A. 現在のプロジェクトを監査（ローカル）
-カレントディレクトリを監査し、エコシステムを自動判別して MIT ライセンスに対する適合性を検証します：
 ```bash
 license-trace trace .
 ```

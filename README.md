@@ -33,27 +33,60 @@
 
 ## Installation
 
-### Prerequisites
-- Rust 1.75 or later (with `cargo`)
+Choose your preferred package manager or download pre-compiled binaries:
 
-### Build from Source
+### 1. Via Cargo (Rust)
+```bash
+cargo install license-trace
+```
+
+### 2. Via Python / pip
+```bash
+pip install license-trace
+```
+
+### 3. Pre-compiled Binaries (GitHub Releases)
+Download standalone executable archives for your OS and architecture from [GitHub Releases](https://github.com/rikutoyamada01/license-trace/releases/latest):
+- **Linux**: `license-trace-v*-x86_64-unknown-linux-gnu.tar.gz` / `aarch64`
+- **macOS**: `license-trace-v*-aarch64-apple-darwin.tar.gz` (Apple Silicon) / `x86_64` (Intel)
+- **Windows**: `license-trace-v*-x86_64-pc-windows-msvc.zip`
+
+### 4. Build from Source
 ```bash
 git clone https://github.com/rikutoyamada01/license-trace.git
 cd license-trace
-cargo build --release
+cargo install --path .
 ```
-The compiled binary will be available at `./target/release/license-trace`.
 
 ---
 
-## Usage
+## Usage & CLI Commands
 
-### 1. Unified `trace` Command
+### 1. Project Compliance Audit (`audit` or `trace .`)
+
+Audit a local project directory for compliance, obligations, and license compatibility against your target outbound license (defaults to `MIT`):
+
+```bash
+# Audit current directory
+license-trace audit
+
+# Audit specific directory with target outbound license
+license-trace audit -p ./my-project --outbound "MIT OR Apache-2.0"
+
+# Audit only production dependencies (exclude devDependencies)
+license-trace audit --prod-only
+
+# CI Gate: fail if incompatible licenses or unknown licenses are detected
+license-trace audit --fail-on-incompatible --fail-on-unknown
+```
+
+---
+
+### 2. Universal Tracer (`trace`)
 
 The `trace` command automatically identifies whether the target is a local directory, a remote registry package, or a Git URL.
 
 #### A. Audit Current Project (Local)
-Inspects the current working directory, detects the ecosystem, and evaluates compliance against MIT:
 ```bash
 license-trace trace .
 ```
