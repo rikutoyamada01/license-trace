@@ -166,8 +166,8 @@ impl LicenseAnalysis {
         let cleaned = upper.replace(['(', ')', '/'], " ");
         let tokens: Vec<&str> = cleaned.split_whitespace().collect();
 
-        // 1. BUSL / BSL
-        if upper.contains("BUSL") || upper.contains("BSL") {
+        // 1. BUSL (Business Source License)
+        if upper.contains("BUSL") {
             let (cat, obs) = categorize_single_spdx("BUSL-1.1");
             return Self {
                 raw: raw.to_string(),
@@ -295,8 +295,8 @@ impl LicenseAnalysis {
 pub fn categorize_single_spdx(id: &str) -> (LicenseCategory, LicenseObligations) {
     let upper = id.to_uppercase();
 
-    // 1. BUSL / BSL (Business Source License) -> NonCommercial
-    if upper.starts_with("BUSL") || upper.starts_with("BSL") {
+    // 1. BUSL (Business Source License) -> NonCommercial
+    if upper.starts_with("BUSL") {
         return (
             LicenseCategory::NonCommercial,
             LicenseObligations {
@@ -626,6 +626,22 @@ mod tests {
         let analysis = LicenseAnalysis::parse("BUSL-1.1");
         assert_eq!(analysis.category, LicenseCategory::NonCommercial);
         assert!(!analysis.obligations.commercial_use_allowed);
+    }
+
+    #[test]
+    fn test_bsl_is_permissive() {
+        let analysis = LicenseAnalysis::parse("BSL-1.0");
+        assert_eq!(analysis.category, LicenseCategory::Permissive);
+        assert!(analysis.obligations.commercial_use_allowed);
+    }
+
+    #[test]
+    fn test_torch_composite_is_permissive() {
+        let analysis = LicenseAnalysis::parse(
+            "Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND MIT",
+        );
+        assert_eq!(analysis.category, LicenseCategory::Permissive);
+        assert!(analysis.obligations.commercial_use_allowed);
     }
 
     #[test]
