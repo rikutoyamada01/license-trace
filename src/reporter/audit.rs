@@ -49,16 +49,40 @@ impl AuditReporter {
 
         // 3. 義務・制約の集約
         println!("--- Obligations (Lower Bound) ---");
-        let comm_str = if report.obligations.commercial_use_allowed {
-            "Allowed".green().to_string()
+        let comm_str = if !report.obligations.commercial_use_allowed {
+            "PROHIBITED (Forbidden by Non-Commercial dependency)"
+                .red()
+                .bold()
+                .to_string()
+        } else if report.obligations.unknown_license_count > 0 {
+            format!(
+                "Needs Review ({} unknown package(s) detected; all identified packages are Allowed)",
+                report.obligations.unknown_license_count
+            )
+            .cyan()
+            .bold()
+            .to_string()
         } else {
-            "PROHIBITED".red().to_string()
-        };
-        let dist_str = if report.obligations.distribution_allowed {
             "Allowed".green().to_string()
-        } else {
-            "Restricted".red().to_string()
         };
+
+        let dist_str = if !report.obligations.distribution_allowed {
+            "Restricted (Proprietary or distribution-restricted dependency)"
+                .red()
+                .bold()
+                .to_string()
+        } else if report.obligations.unknown_license_count > 0 {
+            format!(
+                "Needs Review ({} unknown package(s) detected; all identified packages are Allowed)",
+                report.obligations.unknown_license_count
+            )
+            .cyan()
+            .bold()
+            .to_string()
+        } else {
+            "Allowed".green().to_string()
+        };
+
         let notice_str = if report.obligations.notice_required {
             format!(
                 "Required ({} packages require attribution)",
@@ -66,11 +90,27 @@ impl AuditReporter {
             )
             .yellow()
             .to_string()
+        } else if report.obligations.unknown_license_count > 0 {
+            "Needs Review (Pending unknown licenses; not required for identified packages)"
+                .cyan()
+                .to_string()
         } else {
             "Not required".green().to_string()
         };
+
         let disc_str = match report.obligations.worst_source_disclosure {
-            SourceDisclosureLevel::None => "None (Permissive)".green().to_string(),
+            SourceDisclosureLevel::None => {
+                if report.obligations.unknown_license_count > 0 {
+                    format!(
+                        "Needs Review ({} unknown package(s) pending; None for all identified packages)",
+                        report.obligations.unknown_license_count
+                    )
+                    .cyan()
+                    .to_string()
+                } else {
+                    "None (Permissive)".green().to_string()
+                }
+            }
             SourceDisclosureLevel::LibraryLevel => {
                 "Library Level (Weak Copyleft)".yellow().to_string()
             }

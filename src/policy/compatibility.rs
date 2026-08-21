@@ -117,10 +117,40 @@ impl CompatibilityReport {
 
         // 5. 概要サマリー作成
         let summary = match status {
-            CompatibilityStatus::Compatible => format!("All dependencies are compatible with '{}'. Safe for distribution!", outbound_license),
-            CompatibilityStatus::Warning => format!("Compatible with '{}' under certain conditions (e.g. notices & un-modified weak copyleft).", outbound_license),
-            CompatibilityStatus::Incompatible => format!("CRITICAL: Incompatible with '{}' due to strong copyleft or non-commercial constraints.", outbound_license),
-            CompatibilityStatus::NeedsReview => format!("Needs manual review: {} unknown licenses found while verifying for '{}'.", obs.unknown_license_count, outbound_license),
+            CompatibilityStatus::Compatible => format!(
+                "All dependencies are compatible with '{}'. Safe for distribution!",
+                outbound_license
+            ),
+            CompatibilityStatus::Warning => {
+                if obs.unknown_license_count > 0 {
+                    format!(
+                        "WARNING: Conditions required (e.g. weak copyleft) and {} unknown package(s) require review for '{}'.",
+                        obs.unknown_license_count, outbound_license
+                    )
+                } else {
+                    format!(
+                        "Compatible with '{}' under certain conditions (e.g. notices & un-modified weak copyleft).",
+                        outbound_license
+                    )
+                }
+            }
+            CompatibilityStatus::Incompatible => {
+                if obs.unknown_license_count > 0 {
+                    format!(
+                        "CRITICAL: Incompatible with '{}' due to strong copyleft/non-commercial constraints (plus {} unknown package(s)).",
+                        outbound_license, obs.unknown_license_count
+                    )
+                } else {
+                    format!(
+                        "CRITICAL: Incompatible with '{}' due to strong copyleft or non-commercial constraints.",
+                        outbound_license
+                    )
+                }
+            }
+            CompatibilityStatus::NeedsReview => format!(
+                "Needs manual review: {} unknown package(s) detected while verifying for '{}' (all identified packages are compatible).",
+                obs.unknown_license_count, outbound_license
+            ),
         };
 
         Self {

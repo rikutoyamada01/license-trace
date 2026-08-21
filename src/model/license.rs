@@ -387,7 +387,23 @@ pub fn categorize_single_spdx(id: &str) -> (LicenseCategory, LicenseObligations)
         );
     }
 
-    // 6. Apache-2.0
+    // 6. Proprietary / Commercial restriction
+    if upper.contains("PROPRIETARY") || upper.starts_with("LICENSEREF-NVIDIA") {
+        return (
+            LicenseCategory::Proprietary,
+            LicenseObligations {
+                commercial_use_allowed: true,
+                distribution_allowed: false,
+                notice_required: true,
+                source_disclosure: SourceDisclosureLevel::None,
+                state_changes_required: false,
+                patent_grant: false,
+                is_unknown: false,
+            },
+        );
+    }
+
+    // 7. Apache-2.0
     if upper.starts_with("APACHE") {
         return (
             LicenseCategory::Permissive,
@@ -403,7 +419,7 @@ pub fn categorize_single_spdx(id: &str) -> (LicenseCategory, LicenseObligations)
         );
     }
 
-    // 7. BSD Licenses
+    // 8. BSD Licenses
     if upper.starts_with("BSD") {
         return (
             LicenseCategory::Permissive,
@@ -419,14 +435,36 @@ pub fn categorize_single_spdx(id: &str) -> (LicenseCategory, LicenseObligations)
         );
     }
 
-    // 8. Permissive (MIT, ISC, 0BSD, Unlicense, CC0, Zlib, BSL, Unicode, etc.)
-    if upper.starts_with("UNICODE") || upper.starts_with("CDLA-PERMISSIVE") || upper == "BSL-1.0" {
+    // 9. Permissive (MIT-*, PSF, Python, ISC, 0BSD, Unlicense, CC0, Zlib, BSL, Unicode, etc.)
+    if upper.starts_with("MIT")
+        || upper.starts_with("PSF")
+        || upper.starts_with("PYTHON")
+        || upper.starts_with("CNRI-PYTHON")
+        || upper.starts_with("UNICODE")
+        || upper.starts_with("CDLA-PERMISSIVE")
+        || upper.starts_with("0BSD")
+        || upper.starts_with("CC0")
+        || upper.starts_with("UNLICENSE")
+        || upper.starts_with("ZLIB")
+        || upper.starts_with("WTFPL")
+        || upper.starts_with("POSTGRESQL")
+        || upper.starts_with("RUBY")
+        || upper.starts_with("BSL-1.0")
+        || upper.starts_with("OPENSSL")
+        || upper.starts_with("CURL")
+        || upper.starts_with("W3C")
+        || upper.starts_with("ISC")
+        || upper == "DUAL LICENSE"
+    {
         return (
             LicenseCategory::Permissive,
             LicenseObligations {
                 commercial_use_allowed: true,
                 distribution_allowed: true,
-                notice_required: true,
+                notice_required: !upper.starts_with("0BSD")
+                    && !upper.starts_with("UNLICENSE")
+                    && !upper.starts_with("CC0")
+                    && upper != "MIT-0",
                 source_disclosure: SourceDisclosureLevel::None,
                 state_changes_required: false,
                 patent_grant: false,
@@ -435,35 +473,18 @@ pub fn categorize_single_spdx(id: &str) -> (LicenseCategory, LicenseObligations)
         );
     }
 
-    match upper.as_str() {
-        "MIT" | "ISC" | "0BSD" | "UNLICENSE" | "CC0-1.0" | "CC0" | "ZLIB" | "WTFPL"
-        | "POSTGRESQL" | "PYTHON-2.0" | "RUBY" | "BSL-1.0" => (
-            LicenseCategory::Permissive,
-            LicenseObligations {
-                commercial_use_allowed: true,
-                distribution_allowed: true,
-                notice_required: upper != "0BSD"
-                    && upper != "UNLICENSE"
-                    && !upper.starts_with("CC0"),
-                source_disclosure: SourceDisclosureLevel::None,
-                state_changes_required: false,
-                patent_grant: false,
-                is_unknown: false,
-            },
-        ),
-        _ => (
-            LicenseCategory::Unknown,
-            LicenseObligations {
-                commercial_use_allowed: true,
-                distribution_allowed: true,
-                notice_required: true,
-                source_disclosure: SourceDisclosureLevel::None,
-                state_changes_required: false,
-                patent_grant: false,
-                is_unknown: true,
-            },
-        ),
-    }
+    (
+        LicenseCategory::Unknown,
+        LicenseObligations {
+            commercial_use_allowed: true,
+            distribution_allowed: true,
+            notice_required: true,
+            source_disclosure: SourceDisclosureLevel::None,
+            state_changes_required: false,
+            patent_grant: false,
+            is_unknown: true,
+        },
+    )
 }
 
 /// AST (RPN) による SPDX 式の再帰評価
